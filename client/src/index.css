@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+@theme {
+  /* ========================================
+     PALETA DE COLORES — SIGECAP
+     Cambiar aquí actualiza todo el sistema.
+     ======================================== */
+
+  /* PRIMARY — Guinda institucional (Gobierno de México)
+     Botones, links, sidebar activo, badges principales,
+     focus rings, toggles, progress bars, gradientes de avatar */
+  --color-primary-50: #fdf2f5;
+  --color-primary-100: #f9d6e0;
+  --color-primary-200: #e8a3b8;
+  --color-primary-300: #c4607e;
+  --color-primary-400: #9b2247;
+  --color-primary-500: #611232;   /* Botones, badges, iconos activos */
+  --color-primary-600: #520f2b;   /* Botones hover, headers de modales */
+  --color-primary-700: #430c23;   /* Botones pressed */
+  --color-primary-800: #34091b;   /* Textos de título en PDF export */
+  --color-primary-900: #250613;   /* Fondo sidebar */
+
+  /* ACCENT — Dorado institucional
+     Gradientes de avatar, decoraciones, detalles visuales */
+  --color-accent-400: #e6d194;
+  --color-accent-500: #a57f2c;   /* Gradiente avatar, acentos visuales */
+  --color-accent-600: #8a6a24;
+
+  /* NAVY — Verde oscuro institucional (PANTONE 626 C / 627 C)
+     Login background, hero section, elementos dark */
+  --color-navy-700: #1e5b4f;     /* Verde claro — PANTONE 626 C */
+  --color-navy-800: #002f2a;     /* Verde oscuro — PANTONE 627 C */
+  --color-navy-900: #001f1b;     /* Verde profundo */
+
+  /* INSTITUCIONAL — Negro y gris oficiales */
+  --color-inst-black: #161a1d;   /* Negro — PANTONE Neutral Black C */
+  --color-inst-gray: #98989A;    /* Gris — PANTONE Cool Gray 7 C */
+
+  /* ========================================
+     TIPOGRAFÍA
+     Cambiar fuente aquí actualiza todo el sistema.
+     Cargar fuente en client/index.html via Google Fonts <link>.
+     ======================================== */
+
+  /* Fuente principal — Noto Sans (tipografía institucional Gobierno de México)
+     Cambiar en client/index.html si se modifica */
+  --font-sans: 'Noto Sans', system-ui, -apple-system, sans-serif;
+
+  /* Escala tipográfica — tamaños reutilizables
+     Usar con text-[--text-xxx] o directamente las clases de Tailwind */
+  --text-display: 2rem;        /* 32px — Títulos de página (h1) */
+  --text-heading: 1.25rem;     /* 20px — Subtítulos, cards (h2) */
+  --text-subheading: 1rem;     /* 16px — Secciones, labels grandes */
+  --text-body: 0.875rem;       /* 14px — Texto general, formularios */
+  --text-caption: 0.75rem;     /* 12px — Metadata, timestamps, badges */
+  --text-micro: 0.625rem;      /* 10px — Etiquetas mínimas, roles */
+
+  /* Pesos tipográficos usados:
+     400 (normal)   → texto de párrafo, descripciones
+     500 (medium)   → labels, nav items inactivos, metadata
+     600 (semibold) → botones, nav items, subtítulos
+     700 (bold)     → nombres, cards, sidebar títulos
+     800 (extrabold)→ títulos de página, números destacados */
+
+  /* ========================================
+     ELEVACIÓN — 3 niveles únicos en todo el proyecto.
+     No usar shadow-sm/md/lg/xl de Tailwind directo en componentes —
+     usar siempre shadow-card-rest / shadow-card-hover / shadow-modal.
+     ======================================== */
+  --shadow-card-rest: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
+  --shadow-card-hover: 0 4px 8px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.04);
+  --shadow-modal: 0 20px 40px -8px rgb(15 23 42 / 0.18), 0 8px 16px -4px rgb(15 23 42 / 0.08);
+
+  /* ========================================
+     COLORES DE TAILWIND USADOS DIRECTAMENTE
+     (no se definen aquí, son de Tailwind):
+
+     slate    → Textos, bordes, fondos neutros, separadores
+     emerald  → Estado activo, éxito, usuarios activos
+     rose     → Estado inactivo, errores, baja, eliminar
+     amber    → Pendientes, advertencias, solicitudes de baja
+     indigo   → Rol admin, nivel completado, badges especiales
+     sky      → Rol capturista
+     violet   → Modalidad virtual
+     blue     → Modalidad presencial, badges de nivel
+     ======================================== */
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+  font-family: var(--font-sans);
+}
+
+@keyframes shimmer-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes geo-drift {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  50% { transform: translateX(8px) translateY(-5px); }
+}
+
+@keyframes geo-drift-alt {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  50% { transform: translateX(-6px) translateY(4px); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+.animate-geo-drift { animation: geo-drift 20s ease-in-out infinite; }
+.animate-geo-drift-alt { animation: geo-drift-alt 25s ease-in-out infinite; }
+.animate-glow-pulse { animation: glow-pulse 5s ease-in-out infinite; }
+
+/* ========================================
+   JERARQUÍA TIPOGRÁFICA — usar estas clases en vez de combinar
+   text-size + font-weight a mano en cada página.
+   ======================================== */
+.text-stat { @apply text-3xl font-extrabold tracking-tight; }
+.text-section-title { @apply text-lg font-bold; }
+.text-label { @apply text-xs font-semibold text-slate-500 uppercase tracking-wide; }
+
+/* ========================================
+   BENTO GRID — estructura para dashboards/stats (Fase 1).
+   bento-lg = KPI hero o card de progreso (doble alto)
+   bento-md = gráfica mediana
+   bento-sm = mini-stat
+   ======================================== */
+.bento-grid { @apply grid grid-cols-4 gap-4 auto-rows-[minmax(120px,auto)]; }
+.bento-lg { @apply col-span-4 row-span-2 sm:col-span-2; }
+.bento-md { @apply col-span-4 sm:col-span-2; }
+.bento-sm { @apply col-span-2 sm:col-span-1; }
+
+/* WCAG 2.3.3 -- las animaciones de framer-motion (stagger/fadeUp en todas
+   las paginas) ya se desactivan via MotionConfig reducedMotion="user" en
+   main.tsx. Esto cubre las animaciones CSS puras de arriba (decoraciones
+   de fondo en loop infinito), que MotionConfig no toca. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-geo-drift,
+  .animate-geo-drift-alt,
+  .animate-glow-pulse {
+    animation: none;
+  }
+}
