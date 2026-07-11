@@ -16,6 +16,8 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 const bcryptPool = new Piscina({
   filename: fileURLToPath(new URL("./workers/bcrypt-worker.mjs", import.meta.url)),
+  minThreads: 1,
+  maxThreads: 2,
 });
 
 // saltRounds=10: medido con carga real (k6), 12 rondas = ~230ms CPU/hash,
