@@ -20,11 +20,11 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       // challenges.cloudflare.com: script + iframe del widget de Turnstile (CAPTCHA de registro).
-      scriptSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "https://challenges.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "https://challenges.cloudflare.com", "https://static.cloudflareinsights.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
       fontSrc: ["'self'", "fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "https://challenges.cloudflare.com"],
+      connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://cloudflareinsights.com"],
       frameSrc: ["https://challenges.cloudflare.com"],
       objectSrc: ["'none'"],
     },
