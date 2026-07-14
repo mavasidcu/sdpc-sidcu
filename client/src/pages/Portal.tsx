@@ -308,7 +308,7 @@ export default function Portal() {
   const completados = solicitudes?.filter((s: any) => (s.solicitudes_curso ?? s).estado === "completada").length ?? 0;
   const disponibles = Math.max(0, MAX_CURSOS_ACTIVOS - aprobadas);
 
-  const nivelActual = perfil?.nivelProgresion ?? 0;
+  const nivelActual = servidor?.nivelProgresion ?? 0;
 
   return (
     <motion.div
@@ -364,8 +364,8 @@ export default function Portal() {
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-900">{user?.nombre ?? "Usuario"}</h2>
-            {perfil?.cargo && <p className="text-sm text-slate-600">{perfil.cargo}</p>}
-            {perfil?.dependencia && <p className="text-sm text-slate-400">{perfil.dependencia}</p>}
+            {servidor?.cargo && <p className="text-sm text-slate-600">{servidor.cargo}</p>}
+            {servidor?.dependencia && <p className="text-sm text-slate-400">{servidor.dependencia}</p>}
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">

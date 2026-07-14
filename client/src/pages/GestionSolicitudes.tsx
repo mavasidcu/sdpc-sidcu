@@ -9,6 +9,8 @@ import {
   User,
   BookOpen,
   Building2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import ImportarCSVModal from "@/components/ImportarCSVModal";
 
@@ -54,14 +56,16 @@ export default function GestionSolicitudes() {
   const utils = trpc.useUtils();
   const [estadoFilter, setEstadoFilter] = useState<Estado>("");
   const [userFilter, setUserFilter] = useState("");
+  const [page, setPage] = useState(1);
   const [modal, setModal] = useState<ModalState>({ type: "closed" });
   const [calificacion, setCalificacion] = useState("");
   const [showImportCalificaciones, setShowImportCalificaciones] = useState(false);
 
-  const { data: solicitudes, isLoading, isFetching } = trpc.solicitudes.listar.useQuery(
-    { estado: estadoFilter || undefined },
+  const { data, isLoading, isFetching } = trpc.solicitudes.listar.useQuery(
+    { estado: estadoFilter || undefined, page },
     { placeholderData: (prev) => prev },
   );
+  const solicitudes = data?.items;
 
   const { data: conteoAcreditacion } = trpc.solicitudes.conteoAcreditacion.useQuery();
   const { data: conteoPorBloque } = trpc.solicitudes.conteoPorBloque.useQuery();
@@ -109,7 +113,7 @@ export default function GestionSolicitudes() {
           </button>
           <div className="hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-600 sm:flex">
             <ClipboardCheck size={14} />
-            {solicitudes?.length ?? 0} solicitudes
+            {data?.total ?? 0} solicitudes
           </div>
         </div>
       </motion.div>
@@ -198,7 +202,7 @@ export default function GestionSolicitudes() {
           return (
             <button
               key={est.value}
-              onClick={() => setEstadoFilter(est.value)}
+              onClick={() => { setEstadoFilter(est.value); setPage(1); }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                 active
                   ? "bg-primary-500 text-white shadow-sm shadow-primary-500/25"
@@ -320,6 +324,31 @@ export default function GestionSolicitudes() {
             );
           })}
         </motion.div>
+      )}
+
+      {/* Paginación */}
+      {data && data.totalPages > 1 && (
+        <div className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white px-4 py-3 text-sm text-slate-600">
+          <span>
+            Página {data.page} de {data.totalPages} ({data.total} resultados)
+          </span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded p-1.5 hover:bg-slate-100 disabled:opacity-30"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
+              disabled={page >= data.totalPages}
+              className="rounded p-1.5 hover:bg-slate-100 disabled:opacity-30"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Completar confirmation modal */}

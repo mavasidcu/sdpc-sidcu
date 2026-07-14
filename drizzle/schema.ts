@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, datetime, varchar, boolean, bigint, index } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, datetime, varchar, boolean, bigint, index, foreignKey } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -17,7 +17,7 @@ export const users = mysqlTable("users", {
 
 export const servidoresPublicos = mysqlTable("servidores_publicos", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").unique(),
+  userId: int("user_id").unique().references(() => users.id, { onDelete: "set null" }),
   nombreCompleto: varchar("nombre_completo", { length: 255 }).notNull(),
   rfc: varchar("rfc", { length: 13 }).notNull().unique(),
   curp: varchar("curp", { length: 18 }).notNull().unique(),
@@ -43,11 +43,10 @@ export const servidoresPublicos = mysqlTable("servidores_publicos", {
   jefeInmediatoCurp: varchar("jefe_inmediato_curp", { length: 18 }),
   jefeInmediatoNombre: varchar("jefe_inmediato_nombre", { length: 255 }),
   jefeInmediatoCorreo: varchar("jefe_inmediato_correo", { length: 320 }),
-  folioSdpc: varchar("folio_sdpc", { length: 20 }),
   estatus: mysqlEnum("estatus", ["activo", "inactivo"]).default("activo").notNull(),
   observaciones: text("observaciones"),
-  creadoPor: int("creado_por").notNull(),
-  actualizadoPor: int("actualizado_por").notNull(),
+  creadoPor: int("creado_por").notNull().references(() => users.id, { onDelete: "restrict" }),
+  actualizadoPor: int("actualizado_por").notNull().references(() => users.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
@@ -71,8 +70,11 @@ export const servidoresPublicos = mysqlTable("servidores_publicos", {
 
 export const auditoria = mysqlTable("auditoria", {
   id: int("id").autoincrement().primaryKey(),
-  servidorId: int("servidor_id"),
-  usuarioId: int("usuario_id").notNull(),
+  servidorId: int("servidor_id").references(() => servidoresPublicos.id, { onDelete: "set null" }),
+  // notNull + RESTRICT a proposito: nunca se hace hard-delete de usuarios
+  // (ver eliminarUsuarioCompleto, removido -- solo isActive:false) para que
+  // el rastro de auditoria nunca pierda quien hizo cada accion.
+  usuarioId: int("usuario_id").notNull().references(() => users.id, { onDelete: "restrict" }),
   accion: mysqlEnum("accion", ["crear", "actualizar", "eliminar", "ver"]).notNull(),
   cambiosAnteriores: text("cambios_anteriores"),
   cambiosPosterior: text("cambios_posterior"),
@@ -92,31 +94,29 @@ export const archivosCargados = mysqlTable("archivos_cargados", {
   tamanoBytes: bigint("tamano_bytes", { mode: "number" }).notNull(),
   s3Key: varchar("s3_key", { length: 500 }).notNull(),
   s3Url: text("s3_url").notNull(),
-  cargadoPor: int("cargado_por").notNull(),
+  cargadoPor: int("cargado_por").notNull().references(() => users.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const passwordResetTokens = mysqlTable("password_reset_tokens", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   token: varchar("token", { length: 255 }).notNull().unique(),
   expiresAt: timestamp("expires_at").notNull(),
   usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Solo estado de onboarding/baja -- rfc/curp/cargo/dependencia/nivelGobierno/
+// grupoFuncion/nivelProgresion/fechaIngreso/datosContacto vivian duplicados
+// aqui Y en servidoresPublicos (que es a donde el onboarding en realidad
+// escribe, ver perfil.crear). La copia de aqui nunca se volvia a leer para
+// nada real, solo quedaba desincronizada con el tiempo -- causo un bug real
+// (nivelProgresion se perdia al auto-registrarse) antes de esta sesion.
+// servidoresPublicos es la unica fuente de verdad para esos datos.
 export const perfilesServidor = mysqlTable("perfiles_servidor", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull().unique(),
-  rfc: varchar("rfc", { length: 13 }).notNull(),
-  curp: varchar("curp", { length: 18 }).notNull(),
-  cargo: varchar("cargo", { length: 255 }).notNull(),
-  dependencia: varchar("dependencia", { length: 255 }).notNull(),
-  nivelGobierno: mysqlEnum("nivel_gobierno", ["federal", "estatal", "municipal", "otro"]).notNull(),
-  grupoFuncion: mysqlEnum("grupo_funcion", ["ADMO", "TECN", "SERV", "COMUN", "PROFE", "EDU"]).notNull(),
-  nivelProgresion: int("nivel_progresion").default(0).notNull(),
-  fechaIngreso: datetime("fecha_ingreso").notNull(),
-  datosContacto: varchar("datos_contacto", { length: 255 }),
+  userId: int("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
   completado: boolean("completado").default(false).notNull(),
   solicitudBaja: boolean("solicitud_baja").default(false).notNull(),
   motivoBaja: text("motivo_baja"),
@@ -125,8 +125,6 @@ export const perfilesServidor = mysqlTable("perfiles_servidor", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
   userIdIdx: index("perfil_user_id_idx").on(table.userId),
-  nivelGobiernoIdx: index("perfil_nivel_gobierno_idx").on(table.nivelGobierno),
-  nivelProgresionIdx: index("perfil_nivel_progresion_idx").on(table.nivelProgresion),
   completadoIdx: index("perfil_completado_idx").on(table.completado),
   solicitudBajaIdx: index("perfil_baja_idx").on(table.solicitudBaja),
 }));
@@ -153,7 +151,7 @@ export const cursos = mysqlTable("cursos", {
   fechaEvaluacion: timestamp("fecha_evaluacion"),
   horarioEvaluacion: varchar("horario_evaluacion", { length: 255 }),
   duracionEvaluacion: varchar("duracion_evaluacion", { length: 50 }),
-  creadoPor: int("creado_por").notNull(),
+  creadoPor: int("creado_por").notNull().references(() => users.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
@@ -178,8 +176,8 @@ export const instituciones = mysqlTable("instituciones", {
 
 export const cursosInstituciones = mysqlTable("cursos_instituciones", {
   id: int("id").autoincrement().primaryKey(),
-  cursoId: int("curso_id").notNull(),
-  institucionId: int("institucion_id").notNull(),
+  cursoId: int("curso_id").notNull().references(() => cursos.id, { onDelete: "cascade" }),
+  institucionId: int("institucion_id").notNull().references(() => instituciones.id, { onDelete: "cascade" }),
   cupoMaximo: int("cupo_maximo").notNull(),
   cupoDisponible: int("cupo_disponible").notNull(),
   horario: varchar("horario", { length: 255 }),
@@ -197,8 +195,11 @@ export const cursosInstituciones = mysqlTable("cursos_instituciones", {
 
 export const solicitudesCurso = mysqlTable("solicitudes_curso", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(),
-  cursoId: int("curso_id").notNull(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  cursoId: int("curso_id").notNull().references(() => cursos.id, { onDelete: "restrict" }),
+  // Sin .references() inline: el nombre auto-generado por Drizzle para esta
+  // FK pasa el limite de 64 caracteres de MySQL (tabla+columna+ref largos).
+  // Se define abajo con foreignKey() + nombre corto explicito (fk_sol_curso_institucion).
   cursoInstitucionId: int("curso_institucion_id"),
   estado: mysqlEnum("estado", ["pendiente", "aprobada", "rechazada", "completada"]).default("pendiente").notNull(),
   calificacion: int("calificacion"),
@@ -212,6 +213,11 @@ export const solicitudesCurso = mysqlTable("solicitudes_curso", {
   createdAtIdx: index("sol_created_at_idx").on(table.createdAt),
   userEstadoIdx: index("sol_user_estado_idx").on(table.userId, table.estado),
   userCursoIdx: index("sol_user_curso_idx").on(table.userId, table.cursoId),
+  cursoInstitucionFk: foreignKey({
+    columns: [table.cursoInstitucionId],
+    foreignColumns: [cursosInstituciones.id],
+    name: "fk_sol_curso_institucion",
+  }).onDelete("set null"),
 }));
 
 export type User = typeof users.$inferSelect;

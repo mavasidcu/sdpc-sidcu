@@ -36,15 +36,30 @@ function buscarCampo(row: Record<string, any>, ...nombres: string[]): string | u
 }
 
 // Convierte fechas en formato DD/MM/YYYY (formato de Excel/CSV) a ISO para que Date las parsee bien.
+//
+// CRITICO: Excel exporta fechas con hora pegada ("2017-08-16 00:00:00"),
+// que no matchea el regex DD/MM/YYYY puro -- antes esto caia directo a
+// `new Date(textoCrudo)`, y JS interpreta fecha+hora SIN "Z" como hora
+// LOCAL (no UTC), corriendo la fecha 5-6 horas al guardarla (confirmado
+// con datos reales: servidores con fecha_ingreso en :05:00:00Z/:06:00:00Z
+// en vez de medianoche). Se corta cualquier hora pegada ANTES de intentar
+// el regex, y si el resultado no es una fecha pura YYYY-MM-DD reconocible,
+// se rechaza en vez de arriesgarse a un new Date() ambiguo.
 function parseFechaDDMMYYYY(valor: string | undefined): string | null {
   if (!valor) return null;
-  const texto = valor.toString().trim();
-  if (!texto) return null;
-  const match = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  const isoCandidato = match
-    ? `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`
-    : texto;
-  return isNaN(new Date(isoCandidato).getTime()) ? null : isoCandidato;
+  const textoCompleto = valor.toString().trim();
+  if (!textoCompleto) return null;
+  // Corta cualquier componente de hora pegado (espacio o "T") -- solo interesa la fecha.
+  const texto = textoCompleto.split(/[\sT]/)[0];
+  const matchDDMMYYYY = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (matchDDMMYYYY) {
+    const [, dd, mm, yyyy] = matchDDMMYYYY;
+    return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+  // Ya viene en ISO puro (YYYY-MM-DD) -- valido tal cual, sin pasar por new Date()
+  // con texto ambiguo.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
+  return null;
 }
 
 // El CSV real trae "grupo función" como texto humano (ej. "Técnico",

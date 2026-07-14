@@ -14,8 +14,15 @@ if (!process.env.JWT_SECRET) {
 }
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// Sin limite explicito, Piscina escala minThreads/maxThreads segun los CPUs
+// que detecte el host -- en una instancia nueva con mas CPUs disponibles que
+// la vieja, eso levanta mas worker threads en reposo (cada uno con su propio
+// heap de V8) sin que el trafico real lo justifique. El volumen de logins de
+// este sistema no necesita mas de 2 threads concurrentes.
 const bcryptPool = new Piscina({
   filename: fileURLToPath(new URL("./workers/bcrypt-worker.mjs", import.meta.url)),
+  minThreads: 1,
+  maxThreads: 2,
 });
 
 // saltRounds=10: medido con carga real (k6), 12 rondas = ~230ms CPU/hash,

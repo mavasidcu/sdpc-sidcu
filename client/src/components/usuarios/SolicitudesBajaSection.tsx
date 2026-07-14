@@ -54,7 +54,7 @@ export default function SolicitudesBajaSection() {
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-800">{user.nombre}</p>
-                <p className="text-xs text-slate-400">{user.email} — {perfil.cargo}</p>
+                <p className="text-xs text-slate-400">{user.email} — {item.cargo}</p>
                 <p className="mt-1 text-xs text-amber-700">
                   <LogOut size={10} className="mr-1 inline" />
                   {perfil.motivoBaja}

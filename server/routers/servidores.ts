@@ -81,12 +81,10 @@ export const servidoresRouter = router({
   crear: requireRole("admin", "capturista")
     .input(servidorInput)
     .mutation(async ({ ctx, input }) => {
-      const folioSdpc = String(Date.now()).slice(-6);
       const id = await crearServidor({
         ...input,
         datosContacto: input.datosContacto ?? null,
         observaciones: input.observaciones ?? null,
-        folioSdpc,
         creadoPor: ctx.user.id,
         actualizadoPor: ctx.user.id,
       });

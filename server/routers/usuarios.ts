@@ -12,7 +12,6 @@ import {
   crearAuditoria,
   servidorIdDeUsuario,
   resetearPasswordUsuario,
-  eliminarUsuarioCompleto,
 } from "../db";
 
 export const usuariosRouter = router({
@@ -70,11 +69,12 @@ export const usuariosRouter = router({
     .input(
       z.object({
         search: z.string().optional(),
+        page: z.number().int().positive().default(1),
+        limit: z.number().int().positive().max(100).default(20),
       }),
     )
     .query(async ({ input }) => {
-      const usuarios = await listarUsuarios(input.search);
-      return usuarios;
+      return listarUsuarios(input.search, input.page, input.limit);
     }),
 
   cambiarRol: adminProcedure
@@ -117,16 +117,6 @@ export const usuariosRouter = router({
         descripcion: `${ctx.user.nombre} restableció la contraseña del usuario #${input.id}`,
       } as any);
 
-      return { success: true };
-    }),
-
-  eliminar: adminProcedure
-    .input(z.object({ id: z.number() }))
-    .mutation(async ({ input, ctx }) => {
-      if (input.id === ctx.user.id) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "No puedes eliminar tu propia cuenta" });
-      }
-      await eliminarUsuarioCompleto(input.id);
       return { success: true };
     }),
 });

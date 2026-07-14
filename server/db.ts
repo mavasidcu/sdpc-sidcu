@@ -113,7 +113,7 @@ export async function marcarTokenComoUsado(id: number) {
 
 // ─── Usuarios (Admin) ────────────────────────────────────────────────
 
-export async function listarUsuarios(search?: string) {
+export async function listarUsuarios(search?: string, page = 1, limit = 20) {
   const d = await getDb();
   const conditions = [];
 
@@ -128,25 +128,45 @@ export async function listarUsuarios(search?: string) {
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const offset = (page - 1) * limit;
 
   // No seleccionar passwordHash aquí — el listado se manda al frontend en cada
   // carga de página y quedaría expuesto en el Network tab.
-  const items = await d
-    .select({
-      id: schema.users.id,
-      nombre: schema.users.nombre,
-      curp: schema.users.curp,
-      email: schema.users.email,
-      role: schema.users.role,
-      isActive: schema.users.isActive,
-      createdAt: schema.users.createdAt,
-      updatedAt: schema.users.updatedAt,
-    })
-    .from(schema.users)
-    .where(where)
-    .orderBy(desc(schema.users.createdAt));
+  // totalActivos/totalInactivos son conteos globales (no de la pagina actual)
+  // para que las tarjetas de resumen del admin sigan siendo correctas con
+  // paginacion real -- antes se calculaban filtrando el arreglo completo,
+  // que ya no llega entero al cliente.
+  const [items, countResult, activosResult, inactivosResult] = await Promise.all([
+    d
+      .select({
+        id: schema.users.id,
+        nombre: schema.users.nombre,
+        curp: schema.users.curp,
+        email: schema.users.email,
+        role: schema.users.role,
+        isActive: schema.users.isActive,
+        createdAt: schema.users.createdAt,
+        updatedAt: schema.users.updatedAt,
+      })
+      .from(schema.users)
+      .where(where)
+      .orderBy(desc(schema.users.createdAt))
+      .limit(limit)
+      .offset(offset),
+    d.select({ count: sql<number>`count(*)` }).from(schema.users).where(where),
+    d.select({ count: sql<number>`count(*)` }).from(schema.users).where(and(...conditions, eq(schema.users.isActive, true))),
+    d.select({ count: sql<number>`count(*)` }).from(schema.users).where(and(...conditions, eq(schema.users.isActive, false))),
+  ]);
 
-  return items;
+  return {
+    items,
+    total: countResult[0]?.count ?? 0,
+    totalActivos: activosResult[0]?.count ?? 0,
+    totalInactivos: inactivosResult[0]?.count ?? 0,
+    page,
+    limit,
+    totalPages: Math.ceil((countResult[0]?.count ?? 0) / limit),
+  };
 }
 
 export async function cambiarRolUsuario(id: number, role: string) {
@@ -232,18 +252,6 @@ export async function resetearPasswordUsuario(id: number, passwordHash: string) 
 
 // Elimina el usuario y todo lo que depende exclusivamente de él (perfil, solicitudes).
 // El servidor público asociado no se borra — se desvincula y marca inactivo.
-export async function eliminarUsuarioCompleto(id: number) {
-  const d = await getDb();
-  await d.transaction(async (tx) => {
-    await tx.update(schema.servidoresPublicos)
-      .set({ estatus: "inactivo", userId: null })
-      .where(eq(schema.servidoresPublicos.userId, id));
-    await tx.delete(schema.perfilesServidor).where(eq(schema.perfilesServidor.userId, id));
-    await tx.delete(schema.solicitudesCurso).where(eq(schema.solicitudesCurso.userId, id));
-    await tx.delete(schema.users).where(eq(schema.users.id, id));
-  });
-}
-
 // ─── Servidores Públicos ─────────────────────────────────────────────
 
 export async function crearServidor(data: InsertServidorPublico) {
@@ -565,19 +573,11 @@ export async function actualizarPerfil(userId: number, data: Partial<schema.Inse
     .where(eq(schema.perfilesServidor.userId, userId));
 }
 
-export async function incrementarNivelProgresion(userId: number) {
-  const d = await getDb();
-  const perfil = await obtenerPerfil(userId);
-  if (!perfil || perfil.nivelProgresion >= 5) return;
-  await d
-    .update(schema.perfilesServidor)
-    .set({ nivelProgresion: perfil.nivelProgresion + 1 })
-    .where(eq(schema.perfilesServidor.userId, userId));
-}
-
 export async function listarSolicitudesBaja() {
   const d = await getDb();
   // No usar select() plano aquí — el join trae users.passwordHash al JSON enviado al navegador.
+  // cargo viene de servidoresPublicos (unica fuente de verdad, perfilesServidor
+  // ya no duplica estos datos -- ver comentario en schema.ts).
   return d
     .select({
       perfiles_servidor: schema.perfilesServidor,
@@ -589,9 +589,11 @@ export async function listarSolicitudesBaja() {
         role: schema.users.role,
         isActive: schema.users.isActive,
       },
+      cargo: schema.servidoresPublicos.cargo,
     })
     .from(schema.perfilesServidor)
     .innerJoin(schema.users, eq(schema.perfilesServidor.userId, schema.users.id))
+    .leftJoin(schema.servidoresPublicos, eq(schema.perfilesServidor.userId, schema.servidoresPublicos.userId))
     .where(eq(schema.perfilesServidor.solicitudBaja, true))
     .orderBy(desc(schema.perfilesServidor.fechaSolicitudBaja));
 }
@@ -820,32 +822,49 @@ export async function listarSolicitudesUsuario(userId: number) {
     .orderBy(desc(schema.solicitudesCurso.createdAt));
 }
 
-export async function listarTodasSolicitudes(filtros?: { estado?: string }) {
+export async function listarTodasSolicitudes(filtros?: { estado?: string; page?: number; limit?: number }) {
   const d = await getDb();
   const conditions = [];
   if (filtros?.estado) {
     conditions.push(eq(schema.solicitudesCurso.estado, filtros.estado as any));
   }
   const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const limit = filtros?.limit ?? 20;
+  const page = filtros?.page ?? 1;
+  const offset = (page - 1) * limit;
+
   // No usar select() plano aquí — el join trae users.passwordHash al JSON enviado al navegador.
-  return d
-    .select({
-      solicitudes_curso: schema.solicitudesCurso,
-      cursos: schema.cursos,
-      users: {
-        id: schema.users.id,
-        nombre: schema.users.nombre,
-        curp: schema.users.curp,
-        email: schema.users.email,
-        role: schema.users.role,
-        isActive: schema.users.isActive,
-      },
-    })
-    .from(schema.solicitudesCurso)
-    .innerJoin(schema.cursos, eq(schema.solicitudesCurso.cursoId, schema.cursos.id))
-    .innerJoin(schema.users, eq(schema.solicitudesCurso.userId, schema.users.id))
-    .where(where)
-    .orderBy(desc(schema.solicitudesCurso.createdAt));
+  const [items, countResult] = await Promise.all([
+    d
+      .select({
+        solicitudes_curso: schema.solicitudesCurso,
+        cursos: schema.cursos,
+        users: {
+          id: schema.users.id,
+          nombre: schema.users.nombre,
+          curp: schema.users.curp,
+          email: schema.users.email,
+          role: schema.users.role,
+          isActive: schema.users.isActive,
+        },
+      })
+      .from(schema.solicitudesCurso)
+      .innerJoin(schema.cursos, eq(schema.solicitudesCurso.cursoId, schema.cursos.id))
+      .innerJoin(schema.users, eq(schema.solicitudesCurso.userId, schema.users.id))
+      .where(where)
+      .orderBy(desc(schema.solicitudesCurso.createdAt))
+      .limit(limit)
+      .offset(offset),
+    d.select({ count: sql<number>`count(*)` }).from(schema.solicitudesCurso).where(where),
+  ]);
+
+  return {
+    items,
+    total: countResult[0]?.count ?? 0,
+    page,
+    limit,
+    totalPages: Math.ceil((countResult[0]?.count ?? 0) / limit),
+  };
 }
 
 export async function obtenerSolicitud(id: number) {

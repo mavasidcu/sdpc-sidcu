@@ -76,18 +76,17 @@ export const perfilRouter = router({
         });
       }
 
-      // Crear o actualizar perfil
+      // Crear o actualizar perfil -- solo trackea el estado de onboarding,
+      // los datos reales (rfc/curp/cargo/etc.) van directo a servidoresPublicos
+      // (ver update abajo), no se duplican aquí.
       let id: number;
       if (existing) {
-        await actualizarPerfil(ctx.user.id, { ...input, datosContacto: input.datosContacto ?? null, completado: true });
+        await actualizarPerfil(ctx.user.id, { completado: true });
         id = existing.id;
       } else {
         id = await crearPerfil({
           userId: ctx.user.id,
-          ...input,
-          datosContacto: input.datosContacto ?? null,
           completado: true,
-          nivelProgresion: existingSrv.nivelProgresion ?? 0,
         });
       }
 
@@ -106,16 +105,6 @@ export const perfilRouter = router({
       }).where(eq(schema.servidoresPublicos.id, existingSrv.id));
 
       return { success: true, id };
-    }),
-
-  actualizar: protectedProcedure
-    .input(perfilInput.partial())
-    .mutation(async ({ ctx, input }) => {
-      await actualizarPerfil(ctx.user.id, {
-        ...input,
-        datosContacto: input.datosContacto ?? undefined,
-      });
-      return { success: true };
     }),
 
   solicitarBaja: protectedProcedure

@@ -203,15 +203,21 @@ export const cursosRouter = router({
       }
 
       // Convierte fechas en formato DD/MM/YYYY (formato del CSV) a ISO, que sí parsea Date.
+      // Corta cualquier hora pegada (Excel exporta "2017-08-16 00:00:00") ANTES del
+      // regex -- si no, cae a new Date(textoCrudo) con hora sin "Z", que JS interpreta
+      // como hora LOCAL y corre la fecha 5-6h al guardarse. Ver mismo fix en importacion.ts.
       const parseFechaDDMMYYYY = (valor: any): string | null => {
         if (!valor) return null;
-        const texto = valor.toString().trim();
-        if (!texto) return null;
-        const match = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        const isoCandidato = match
-          ? `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`
-          : texto;
-        return isNaN(new Date(isoCandidato).getTime()) ? null : isoCandidato;
+        const textoCompleto = valor.toString().trim();
+        if (!textoCompleto) return null;
+        const texto = textoCompleto.split(/[\sT]/)[0];
+        const matchDDMMYYYY = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (matchDDMMYYYY) {
+          const [, dd, mm, yyyy] = matchDDMMYYYY;
+          return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+        }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
+        return null;
       };
 
       // Helpers genéricos para normalizar valores "sucios" que llegan de CSV/Excel
