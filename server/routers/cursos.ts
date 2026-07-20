@@ -104,6 +104,24 @@ export const cursosRouter = router({
         finalidad: resolverFinalidad(input.tipoPrograma, input.finalidad),
         creadoPor: ctx.user.id,
       });
+
+      // Mismo auto-asignado que ya hace la importacion CSV (ver import mas
+      // abajo) -- sin esto, un curso creado a mano queda sin institucion
+      // hasta que el admin reabra el modal en modo editar y la asigne a
+      // mano en la pestana "Instituciones", inconsistente con el CSV.
+      const institucionPredeterminadaId = await obtenerInstitucionPredeterminada();
+      if (institucionPredeterminadaId) {
+        await asignarCursoInstitucion({
+          cursoId: id,
+          institucionId: institucionPredeterminadaId,
+          cupoMaximo: 9999,
+          cupoDisponible: 9999,
+          fechaInicio: input.fechaInicio ?? null,
+          fechaFin: input.fechaTermino ?? null,
+          activo: true,
+        });
+      }
+
       return { success: true, id };
     }),
 
