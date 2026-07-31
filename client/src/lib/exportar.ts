@@ -39,9 +39,6 @@ interface ServidorExport {
 
 function formatFecha(date: string | Date): string {
   const d = new Date(date);
-  // timeZone: "UTC" -- fechaIngreso es fecha de calendario pura guardada
-  // como medianoche UTC, sin esto se desfasa un dia segun la timezone del
-  // navegador (mismo bug que fechaInicio/fechaFin de cursos, ver server/db.ts).
   return d.toLocaleDateString("es-MX", {
     day: "2-digit",
     month: "2-digit",
@@ -179,5 +176,191 @@ export function exportarPDF(items: ServidorExport[], filename = "servidores_publ
     margin: { left: 10, right: 10 },
   });
 
-   doc.save(`${filename}_${fechaLocalISO()}.pdf`);
+  doc.save(`${filename}_${fechaLocalISO()}.pdf`);
+}
+
+interface SolicitudExport {
+  nombreUsuario: string;
+  curp: string;
+  curso: string;
+  institucion?: string | null;
+  bloque?: number | null;
+  estado: string;
+  calificacion?: number | null;
+  fechaSolicitud: string | Date;
+}
+
+const ESTADO_SOLICITUD_LABELS: Record<string, string> = {
+  aprobada: "Aprobada",
+  completada: "Completada",
+  pendiente: "Pendiente",
+  rechazada: "Rechazada",
+};
+
+function prepararDatosSolicitudes(items: SolicitudExport[]) {
+  return items.map((s) => ({
+    Servidor: s.nombreUsuario,
+    CURP: s.curp,
+    Curso: s.curso,
+    Institución: s.institucion ?? "",
+    Bloque: s.bloque ?? "",
+    Estado: ESTADO_SOLICITUD_LABELS[s.estado] ?? s.estado,
+    Calificación: s.calificacion ?? "",
+    "Fecha de Inscripción": formatFecha(s.fechaSolicitud),
+  }));
+}
+
+export function exportarSolicitudesExcel(items: SolicitudExport[], filename = "cursos_inscritos") {
+  const datos = prepararDatosSolicitudes(items);
+  const ws = XLSX.utils.json_to_sheet(datos);
+
+  ws["!cols"] = [
+    { wch: 30 }, // Servidor
+    { wch: 20 }, // CURP
+    { wch: 35 }, // Curso
+    { wch: 25 }, // Institución
+    { wch: 10 }, // Bloque
+    { wch: 14 }, // Estado
+    { wch: 12 }, // Calificación
+    { wch: 16 }, // Fecha
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Cursos Inscritos");
+  XLSX.writeFile(wb, `${filename}_${fechaLocalISO()}.xlsx`);
+}
+
+export function exportarSolicitudesPDF(items: SolicitudExport[], filename = "cursos_inscritos") {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "letter" });
+
+  doc.setFontSize(16);
+  doc.setTextColor(97, 18, 50);
+  doc.text("Secretaría de Cultura", 14, 15);
+
+  doc.setFontSize(11);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Cursos Inscritos por Servidores Públicos", 14, 22);
+
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text(
+    `Generado: ${new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })} · ${items.length} registros`,
+    14,
+    28,
+  );
+
+  const headers = ["Servidor", "CURP", "Curso", "Institución", "Bloque", "Estado", "Calificación", "Fecha"];
+
+  const rows = items.map((s) => [
+    s.nombreUsuario,
+    s.curp,
+    s.curso,
+    s.institucion ?? "",
+    s.bloque != null ? String(s.bloque) : "",
+    ESTADO_SOLICITUD_LABELS[s.estado] ?? s.estado,
+    s.calificacion != null ? String(s.calificacion) : "",
+    formatFecha(s.fechaSolicitud),
+  ]);
+
+  autoTable(doc, {
+    head: [headers],
+    body: rows,
+    startY: 33,
+    styles: {
+      fontSize: 7,
+      cellPadding: 1.5,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [97, 18, 50],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 7.5,
+    },
+    alternateRowStyles: {
+      fillColor: [253, 242, 245],
+    },
+    margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`${filename}_${fechaLocalISO()}.pdf`);
+}
+
+
+interface CursoInscritosExport {
+  nombre: string;
+  bloque?: number | null;
+  total: number;
+}
+
+function prepararDatosCursosPorInscritos(items: CursoInscritosExport[]) {
+  return items.map((c) => ({
+    Curso: c.nombre,
+    Bloque: c.bloque ?? "",
+    "Total Inscritos": c.total,
+  }));
+}
+
+export function exportarCursosPorInscritosExcel(items: CursoInscritosExport[], filename = "cursos_por_inscritos") {
+  const datos = prepararDatosCursosPorInscritos(items);
+  const ws = XLSX.utils.json_to_sheet(datos);
+
+  ws["!cols"] = [
+    { wch: 40 }, // Curso
+    { wch: 10 }, // Bloque
+    { wch: 16 }, // Total Inscritos
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Cursos por Inscritos");
+  XLSX.writeFile(wb, `${filename}_${fechaLocalISO()}.xlsx`);
+}
+
+export function exportarCursosPorInscritosPDF(items: CursoInscritosExport[], filename = "cursos_por_inscritos") {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
+
+  doc.setFontSize(16);
+  doc.setTextColor(97, 18, 50);
+  doc.text("Secretaría de Cultura", 14, 15);
+
+  doc.setFontSize(11);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Cursos por Número de Inscritos", 14, 22);
+
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text(
+    `Generado: ${new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })} · ${items.length} cursos`,
+    14,
+    28,
+  );
+
+  const headers = ["Curso", "Bloque", "Total Inscritos"];
+
+  const rows = items.map((c) => [c.nombre, c.bloque != null ? String(c.bloque) : "", String(c.total)]);
+
+  autoTable(doc, {
+    head: [headers],
+    body: rows,
+    startY: 33,
+    styles: {
+      fontSize: 8,
+      cellPadding: 2,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [97, 18, 50],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8.5,
+    },
+    alternateRowStyles: {
+      fillColor: [253, 242, 245],
+    },
+    margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`${filename}_${fechaLocalISO()}.pdf`);
 }
