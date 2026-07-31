@@ -113,7 +113,7 @@ export async function marcarTokenComoUsado(id: number) {
 
 // ─── Usuarios (Admin) ────────────────────────────────────────────────
 
-export async function listarUsuarios(search?: string, page = 1, limit = 20) {
+export async function listarUsuarios(search?: string, page = 1, limit = 20, estatus?: "activo" | "inactivo") {
   const d = await getDb();
   const conditions = [];
 
@@ -127,7 +127,14 @@ export async function listarUsuarios(search?: string, page = 1, limit = 20) {
     );
   }
 
+  // totalActivos/totalInactivos deben quedar fuera de este filtro -- son los
+  // contadores que se muestran en los tabs "Activos"/"Inactivos" (ver mas abajo),
+  // si el estatus tambien entrara aqui uno de los dos conteos siempre daria 0
+  // (isActive=true AND isActive=false nunca es cierto).
+  const itemConditions = estatus ? [...conditions, eq(schema.users.isActive, estatus === "activo")] : conditions;
+
   const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereItems = itemConditions.length > 0 ? and(...itemConditions) : undefined;
   const offset = (page - 1) * limit;
 
   // No seleccionar passwordHash aquí — el listado se manda al frontend en cada
@@ -149,11 +156,11 @@ export async function listarUsuarios(search?: string, page = 1, limit = 20) {
         updatedAt: schema.users.updatedAt,
       })
       .from(schema.users)
-      .where(where)
+      .where(whereItems)
       .orderBy(desc(schema.users.createdAt))
       .limit(limit)
       .offset(offset),
-    d.select({ count: sql<number>`count(*)` }).from(schema.users).where(where),
+    d.select({ count: sql<number>`count(*)` }).from(schema.users).where(whereItems),
     d.select({ count: sql<number>`count(*)` }).from(schema.users).where(and(...conditions, eq(schema.users.isActive, true))),
     d.select({ count: sql<number>`count(*)` }).from(schema.users).where(and(...conditions, eq(schema.users.isActive, false))),
   ]);
