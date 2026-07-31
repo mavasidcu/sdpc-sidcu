@@ -21,8 +21,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  AreaChart,
-  Area,
   Legend,
 } from "recharts";
 
@@ -40,12 +38,6 @@ const GRUPO_LABELS: Record<string, string> = {
   COMUN: "Comunicación",
   PROFE: "Profesional",
   EDU: "Educación",
-};
-
-const MES_LABELS: Record<string, string> = {
-  "01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr",
-  "05": "May", "06": "Jun", "07": "Jul", "08": "Ago",
-  "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dic",
 };
 
 const CHART_COLORS = ["#6366f1", "#8b5cf6", "#3b82f6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6", "#f97316"];
@@ -146,6 +138,7 @@ export default function Reportes() {
     undefined,
     { retry: false }
   );
+  const { data: cursosPorInscritos } = trpc.solicitudes.porCurso.useQuery();
 
   if (isLoading) {
     return (
@@ -176,13 +169,12 @@ export default function Reportes() {
     value: Number(d.count),
   }));
 
-  const mesData = ((stats as any)?.byMes ?? []).map((m: any) => {
-    const [year, month] = (m.mes as string).split("-");
-    return {
-      name: `${MES_LABELS[month] ?? month} ${year?.slice(2)}`,
-      value: Number(m.count),
-    };
-  });
+  // Top 8, ya viene ordenado desc por total desde el server (contarInscritosPorCurso).
+  const cursoRankingData = (cursosPorInscritos ?? []).slice(0, 8).map((c: any) => ({
+    name: c.nombre?.length > 24 ? c.nombre.slice(0, 24) + "…" : c.nombre,
+    fullName: c.nombre,
+    value: Number(c.total),
+  }));
 
   const estatusData = [
     { name: "Activos", value: Number(activos), color: "#10b981" },
@@ -353,42 +345,43 @@ export default function Reportes() {
         )}
       </ChartCard>
 
-      {/* Row 3: Tendencia mensual + Top dependencias */}
+      {/* Row 3: Ranking de cursos + Top dependencias */}
       <div className="bento-grid">
         <div className="bento-md">
-        <ChartCard title="Tendencia de registro mensual" icon={TrendingUp}>
-          {mesData.length > 0 ? (
+        <ChartCard title="Cursos con más inscritos" icon={TrendingUp}>
+          {cursoRankingData.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={mesData} margin={{ left: 0, right: 10 }}>
-                <defs>
-                  <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+              <BarChart data={cursoRankingData} layout="vertical" margin={{ left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
                 <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 10, fill: "#94a3b8" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
+                  type="number"
                   tick={{ fontSize: 11, fill: "#94a3b8" }}
                   axisLine={false}
                   tickLine={false}
                   allowDecimals={false}
                 />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  name="Registros"
-                  stroke="#6366f1"
-                  strokeWidth={2.5}
-                  fill="url(#areaGradient)"
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  width={150}
+                  axisLine={false}
+                  tickLine={false}
                 />
-              </AreaChart>
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value: number) => [value, "Inscritos"]}
+                  labelFormatter={(label: string) => {
+                    const item = cursoRankingData.find((c: any) => c.name === label);
+                    return item?.fullName ?? label;
+                  }}
+                />
+                <Bar dataKey="value" name="Inscritos" radius={[0, 6, 6, 0]}>
+                  {cursoRankingData.map((_: any, i: number) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           ) : (
             <EmptyChart />
