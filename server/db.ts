@@ -867,6 +867,58 @@ export async function listarTodasSolicitudes(filtros?: { estado?: string; page?:
   };
 }
 
+export async function exportarTodasSolicitudes(filtros?: { estado?: string }) {
+  const d = await getDb();
+  const conditions = [];
+  if (filtros?.estado) {
+    conditions.push(eq(schema.solicitudesCurso.estado, filtros.estado as any));
+  }
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const limite = 10000;
+
+  // No usar select() plano aquí — el join trae users.passwordHash al JSON enviado al navegador.
+  const [items, countResult] = await Promise.all([
+    d
+      .select({
+        solicitudes_curso: schema.solicitudesCurso,
+        cursos: schema.cursos,
+        instituciones: { nombre: schema.instituciones.nombre },
+        users: {
+          nombre: schema.users.nombre,
+          curp: schema.users.curp,
+          email: schema.users.email,
+        },
+      })
+      .from(schema.solicitudesCurso)
+      .innerJoin(schema.cursos, eq(schema.solicitudesCurso.cursoId, schema.cursos.id))
+      .innerJoin(schema.users, eq(schema.solicitudesCurso.userId, schema.users.id))
+      .leftJoin(schema.cursosInstituciones, eq(schema.solicitudesCurso.cursoInstitucionId, schema.cursosInstituciones.id))
+      .leftJoin(schema.instituciones, eq(schema.cursosInstituciones.institucionId, schema.instituciones.id))
+      .where(where)
+      .orderBy(desc(schema.solicitudesCurso.createdAt))
+      .limit(limite),
+    d.select({ count: sql<number>`count(*)` }).from(schema.solicitudesCurso).where(where),
+  ]);
+
+  return { items, total: countResult[0]?.count ?? 0, truncado: (countResult[0]?.count ?? 0) > limite };
+}
+
+export async function contarInscritosPorCurso() {
+  const d = await getDb();
+  return d
+    .select({
+      cursoId: schema.cursos.id,
+      nombre: schema.cursos.nombre,
+      bloque: schema.cursos.bloque,
+      total: sql<number>`count(${schema.solicitudesCurso.id})`,
+    })
+    .from(schema.solicitudesCurso)
+    .innerJoin(schema.cursos, eq(schema.solicitudesCurso.cursoId, schema.cursos.id))
+    .where(inArray(schema.solicitudesCurso.estado, ["aprobada", "completada"]))
+    .groupBy(schema.cursos.id, schema.cursos.nombre, schema.cursos.bloque)
+    .orderBy(desc(sql`count(${schema.solicitudesCurso.id})`));
+}
+
 export async function obtenerSolicitud(id: number) {
   const d = await getDb();
   const [sol] = await d.select().from(schema.solicitudesCurso).where(eq(schema.solicitudesCurso.id, id));
