@@ -11,6 +11,8 @@ import {
   getUserByCurp,
   contarAcreditacion,
   contarAprobacionPorBloque,
+  exportarTodasSolicitudes,
+  contarInscritosPorCurso,
   getDb,
 } from "../db";
 import { eq, and, or } from "drizzle-orm";
@@ -82,6 +84,16 @@ export const solicitudesRouter = router({
     .query(async ({ input }) => {
       return listarTodasSolicitudes({ estado: input?.estado, page: input?.page, limit: input?.limit });
     }),
+
+  exportarTodas: adminProcedure
+    .input(z.object({ estado: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      return exportarTodasSolicitudes({ estado: input?.estado });
+    }),
+
+  porCurso: adminProcedure.query(async () => {
+    return contarInscritosPorCurso();
+  }),
 
   completar: adminProcedure
     .input(z.object({ id: z.number(), calificacion: z.number().min(0).max(100) }))
