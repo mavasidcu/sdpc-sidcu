@@ -91,7 +91,12 @@ export const solicitudesRouter = router({
       return exportarTodasSolicitudes({ estado: input?.estado });
     }),
 
-  porCurso: adminProcedure.query(async () => {
+  // Reportes.tsx tambien la usa (consultor tiene acceso de solo lectura ahi),
+  // por eso protectedProcedure + check manual en vez de adminProcedure.
+  porCurso: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin" && ctx.user.role !== "consultor") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "No tienes permisos para esta acción" });
+    }
     return contarInscritosPorCurso();
   }),
 
