@@ -39,6 +39,9 @@ interface ServidorExport {
 
 function formatFecha(date: string | Date): string {
   const d = new Date(date);
+  // timeZone: "UTC" -- fechaIngreso es fecha de calendario pura guardada
+  // como medianoche UTC, sin esto se desfasa un dia segun la timezone del
+  // navegador (mismo bug que fechaInicio/fechaFin de cursos, ver server/db.ts).
   return d.toLocaleDateString("es-MX", {
     day: "2-digit",
     month: "2-digit",
@@ -47,8 +50,27 @@ function formatFecha(date: string | Date): string {
   });
 }
 
+// Para timestamps reales (createdAt) -- a diferencia de fechaIngreso, estos no
+// son "medianoche UTC" sino el momento exacto en que paso algo. Forzar UTC aqui
+// corre la fecha un dia adelante para cualquiera que actuo de noche en Mexico
+// (UTC-6): su timestamp real ya cruzo a la madrugada UTC del dia siguiente.
+function formatFechaHora(date: string | Date): string {
+  const d = new Date(date);
+  return d.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 const NIVEL_PROG_LABELS: Record<number, string> = { 0: "Nuevo ingreso", 1: "N1", 2: "N2", 3: "N3", 4: "N4", 5: "N5" };
 
+// Fecha LOCAL (no UTC) para nombre de archivo y texto "Generado:" -- deben
+// coincidir entre si. Antes el nombre de archivo usaba toISOString() (UTC)
+// y el texto interno usaba toLocaleDateString() (hora local del navegador),
+// dos bases distintas para el mismo momento: en Mexico (UTC-6), ya entrada
+// la noche local UTC ya rodo al dia siguiente, y el archivo salia fechado
+// un dia adelante del texto "Generado:" que mostraba el dia local real.
 function fechaLocalISO(): string {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -206,7 +228,7 @@ function prepararDatosSolicitudes(items: SolicitudExport[]) {
     Bloque: s.bloque ?? "",
     Estado: ESTADO_SOLICITUD_LABELS[s.estado] ?? s.estado,
     Calificación: s.calificacion ?? "",
-    "Fecha de Inscripción": formatFecha(s.fechaSolicitud),
+    "Fecha de Inscripción": formatFechaHora(s.fechaSolicitud),
   }));
 }
 
@@ -259,7 +281,7 @@ export function exportarSolicitudesPDF(items: SolicitudExport[], filename = "cur
     s.bloque != null ? String(s.bloque) : "",
     ESTADO_SOLICITUD_LABELS[s.estado] ?? s.estado,
     s.calificacion != null ? String(s.calificacion) : "",
-    formatFecha(s.fechaSolicitud),
+    formatFechaHora(s.fechaSolicitud),
   ]);
 
   autoTable(doc, {
