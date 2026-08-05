@@ -27,6 +27,7 @@ interface ServidorExport {
   nivel: string;
   fechaIngreso: string | Date;
   datosContacto?: string | null;
+  email?: string | null;
   grupoFuncion: string;
   upa?: string | null;
   cmao?: string | null;
@@ -79,23 +80,35 @@ function fechaLocalISO(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// Excel/Sheets tratan una celda que empieza con =, +, -, @ (o tab/CR) como
+// formula al abrirla -- si ese texto viene de un campo cargado por CSV u
+// onboarding (nombre, cargo, observaciones, etc.), es una via de inyeccion de
+// formulas. Anteponer una comilla simple fuerza texto plano sin cambiar lo
+// que se ve en la celda.
+const CSV_FORMULA_PREFIXES = ["=", "+", "-", "@", "\t", "\r"];
+function sanitizeCell(value: string): string {
+  if (!value) return value;
+  return CSV_FORMULA_PREFIXES.includes(value[0]) ? `'${value}` : value;
+}
+
 function prepararDatos(items: ServidorExport[]) {
   return items.map((s) => ({
-    "Nombre Completo": s.nombreCompleto,
-    RFC: s.rfc,
-    CURP: s.curp,
-    Cargo: s.cargo,
-    Dependencia: s.dependencia,
-    "UPA (Sector)": s.upa ?? "",
-    CMAO: s.cmao ?? "",
-    "UA (Dirección)": s.ua ?? "",
-    "Preparación Académica": s.preparacionAcademica ?? "",
+    "Nombre Completo": sanitizeCell(s.nombreCompleto),
+    RFC: sanitizeCell(s.rfc),
+    CURP: sanitizeCell(s.curp),
+    Cargo: sanitizeCell(s.cargo),
+    Dependencia: sanitizeCell(s.dependencia),
+    "UPA (Sector)": sanitizeCell(s.upa ?? ""),
+    CMAO: sanitizeCell(s.cmao ?? ""),
+    "UA (Dirección)": sanitizeCell(s.ua ?? ""),
+    "Preparación Académica": sanitizeCell(s.preparacionAcademica ?? ""),
     "Nivel Progresión": NIVEL_PROG_LABELS[s.nivelProgresion ?? 0] ?? `N${s.nivelProgresion}`,
     "Fecha de Ingreso": formatFecha(s.fechaIngreso),
-    "Datos de Contacto": s.datosContacto ?? "",
+    "Datos de Contacto": sanitizeCell(s.datosContacto ?? ""),
+    Email: sanitizeCell(s.email ?? ""),
     "Grupo de Función": GRUPO_LABELS[s.grupoFuncion] ?? s.grupoFuncion,
     Estatus: s.estatus === "activo" ? "Activo" : "Inactivo",
-    Observaciones: s.observaciones ?? "",
+    Observaciones: sanitizeCell(s.observaciones ?? ""),
   }));
 }
 
@@ -116,6 +129,7 @@ export function exportarExcel(items: ServidorExport[], filename = "servidores_pu
     { wch: 15 }, // Nivel Progresión
     { wch: 15 }, // Fecha
     { wch: 25 }, // Contacto
+    { wch: 25 }, // Email
     { wch: 18 }, // Grupo
     { wch: 10 }, // Estatus
     { wch: 30 }, // Observaciones
@@ -157,6 +171,7 @@ export function exportarPDF(items: ServidorExport[], filename = "servidores_publ
     "UA",
     "Nivel",
     "Fecha Ingreso",
+    "Email",
     "Grupo",
     "Estatus",
   ];
@@ -172,6 +187,7 @@ export function exportarPDF(items: ServidorExport[], filename = "servidores_publ
     s.ua ?? "",
     NIVEL_PROG_LABELS[s.nivelProgresion ?? 0] ?? `N${s.nivelProgresion}`,
     formatFecha(s.fechaIngreso),
+    s.email ?? "",
     GRUPO_LABELS[s.grupoFuncion] ?? s.grupoFuncion,
     s.estatus === "activo" ? "Activo" : "Inactivo",
   ]);
@@ -221,10 +237,10 @@ const ESTADO_SOLICITUD_LABELS: Record<string, string> = {
 
 function prepararDatosSolicitudes(items: SolicitudExport[]) {
   return items.map((s) => ({
-    Servidor: s.nombreUsuario,
-    CURP: s.curp,
-    Curso: s.curso,
-    Institución: s.institucion ?? "",
+    Servidor: sanitizeCell(s.nombreUsuario),
+    CURP: sanitizeCell(s.curp),
+    Curso: sanitizeCell(s.curso),
+    Institución: sanitizeCell(s.institucion ?? ""),
     Bloque: s.bloque ?? "",
     Estado: ESTADO_SOLICITUD_LABELS[s.estado] ?? s.estado,
     Calificación: s.calificacion ?? "",
@@ -318,7 +334,7 @@ interface CursoInscritosExport {
 
 function prepararDatosCursosPorInscritos(items: CursoInscritosExport[]) {
   return items.map((c) => ({
-    Curso: c.nombre,
+    Curso: sanitizeCell(c.nombre),
     Bloque: c.bloque ?? "",
     "Total Inscritos": c.total,
   }));
