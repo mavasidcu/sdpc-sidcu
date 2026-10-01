@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { fadeUp } from "@/lib/animations";
+import { stagger, fadeUp } from "@/lib/animations";
 import { trpc } from "@/lib/trpc";
 import { parseCSV } from "@/lib/csv";
 import {
@@ -181,7 +181,7 @@ export default function Importacion() {
     <motion.div
       initial="hidden"
       animate="show"
-      variants={{ show: { transition: { staggerChildren: 0.08 } } }}
+      variants={stagger}
       className="mx-auto max-w-4xl space-y-6"
     >
       {/* Header */}

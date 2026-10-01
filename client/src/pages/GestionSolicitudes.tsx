@@ -350,7 +350,7 @@ export default function GestionSolicitudes() {
         </motion.div>
       ) : (
         <motion.div variants={stagger} className="space-y-3">
-          {solicitudes.map((item: any, index: number) => {
+          {solicitudes.map((item: any) => {
             const solicitud = item.solicitudes_curso ?? item;
             const curso = item.cursos ?? {};
             const usuario = item.users ?? {};
@@ -361,7 +361,7 @@ export default function GestionSolicitudes() {
                 key={solicitud.id}
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.04, duration: 0.3 }}
+                transition={{ duration: 0.3 }}
                 className="group rounded-2xl border border-slate-200/60 bg-white p-5 shadow-card-rest transition-all hover:shadow-card-hover hover:border-slate-200"
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

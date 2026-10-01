@@ -198,7 +198,7 @@ export default function Usuarios() {
         </motion.div>
       ) : (
         <motion.div variants={fadeUp} className="space-y-2">
-          {(usuarios as any[]).map((usr, index) => {
+          {(usuarios as any[]).map((usr) => {
             const roleConfig = ROLE_CONFIG[usr.role] ?? ROLE_CONFIG.user;
             const isSelf = usr.id === currentUser?.id;
 
@@ -207,7 +207,7 @@ export default function Usuarios() {
                 key={usr.id}
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.03, duration: 0.3 }}
+                transition={{ duration: 0.3 }}
                 className={`group relative flex items-center gap-4 rounded-2xl border bg-white p-4 shadow-card-rest transition-all hover:shadow-card-hover ${
                   usr.isActive ? "border-slate-200/60" : "border-rose-200/60 bg-rose-50/30"
                 }`}
