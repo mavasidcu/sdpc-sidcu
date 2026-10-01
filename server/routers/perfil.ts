@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "../trpc";
+import { router, protectedProcedureSinRestriccion, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { obtenerPerfil, crearPerfil, actualizarPerfil, listarSolicitudesBaja, toggleActivoUsuario } from "../db";
 import { eq } from "drizzle-orm";
@@ -18,11 +18,11 @@ const perfilInput = z.object({
 });
 
 export const perfilRouter = router({
-  obtener: protectedProcedure.query(async ({ ctx }) => {
+  obtener: protectedProcedureSinRestriccion.query(async ({ ctx }) => {
     return obtenerPerfil(ctx.user.id);
   }),
 
-  crear: protectedProcedure
+  crear: protectedProcedureSinRestriccion
     .input(perfilInput.extend({ email: z.string().nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const existing = await obtenerPerfil(ctx.user.id);
@@ -90,24 +90,33 @@ export const perfilRouter = router({
         });
       }
 
-      await d.update(schema.servidoresPublicos).set({
-        nombreCompleto: ctx.user.nombre,
-        rfc: input.rfc,
-        curp: input.curp,
-        cargo: input.cargo,
-        dependencia: input.dependencia,
-        nivel: input.nivelGobierno,
-        grupoFuncion: input.grupoFuncion,
-        fechaIngreso: input.fechaIngreso,
-        datosContacto: input.datosContacto ?? null,
-        email: input.email ?? existingSrv.email,
-        actualizadoPor: ctx.user.id,
-      }).where(eq(schema.servidoresPublicos.id, existingSrv.id));
+      // input.curp es texto libre (validado por formato, no forzado a
+      // coincidir con el CURP de login) -- si el trabajador corrige un typo
+      // aqui, debe propagarse a users.curp tambien (login es 100% por CURP,
+      // ver routers.ts::login) o la cuenta queda sin poder loguearse con su
+      // CURP correcto. Mismo hueco real que ya se encontro y cerro en
+      // actualizarServidor (server/db.ts) para el modulo admin Servidores.
+      await d.transaction(async (tx) => {
+        await tx.update(schema.servidoresPublicos).set({
+          nombreCompleto: ctx.user.nombre,
+          rfc: input.rfc,
+          curp: input.curp,
+          cargo: input.cargo,
+          dependencia: input.dependencia,
+          nivel: input.nivelGobierno,
+          grupoFuncion: input.grupoFuncion,
+          fechaIngreso: input.fechaIngreso,
+          datosContacto: input.datosContacto ?? null,
+          email: input.email ?? existingSrv.email,
+          actualizadoPor: ctx.user.id,
+        }).where(eq(schema.servidoresPublicos.id, existingSrv.id));
+        await tx.update(schema.users).set({ curp: input.curp }).where(eq(schema.users.id, ctx.user.id));
+      });
 
       return { success: true, id };
     }),
 
-  solicitarBaja: protectedProcedure
+  solicitarBaja: protectedProcedureSinRestriccion
     .input(z.object({ motivo: z.string().min(5, "Describe el motivo de tu solicitud") }))
     .mutation(async ({ ctx, input }) => {
       const perfil = await obtenerPerfil(ctx.user.id);
@@ -121,7 +130,7 @@ export const perfilRouter = router({
       return { success: true };
     }),
 
-  cancelarBaja: protectedProcedure
+  cancelarBaja: protectedProcedureSinRestriccion
     .mutation(async ({ ctx }) => {
       await actualizarPerfil(ctx.user.id, {
         solicitudBaja: false,

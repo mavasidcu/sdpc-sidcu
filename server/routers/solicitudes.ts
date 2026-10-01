@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "../trpc";
+import { router, protectedProcedureSinRestriccion, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import {
   crearSolicitudConAsignacion,
@@ -20,7 +20,7 @@ import * as schema from "../../drizzle/schema";
 import { CALIFICACION_APROBATORIA, CURSOS_REQUERIDOS_ACREDITACION } from "../../shared/const";
 
 export const solicitudesRouter = router({
-  crear: protectedProcedure
+  crear: protectedProcedureSinRestriccion
     .input(z.object({ cursoId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "user") {
@@ -33,6 +33,28 @@ export const solicitudesRouter = router({
       }
 
       const d = await getDb();
+
+      // Candado de seguridad: max 2 solicitudes activas totales, sin importar
+      // bloque. El limite real es "1 por bloque" (abajo), pero ese chequeo se
+      // salta entero si el curso no tiene bloque asignado (hallazgo real en
+      // local: los 10 cursos existentes tenian bloque NULL, cualquiera podia
+      // inscribirse a mas de 2). Este tope nunca deja pasar de largo aunque
+      // bloque vuelva a quedar sin capturar por error.
+      const activasTotal = await d.select({ id: schema.solicitudesCurso.id })
+        .from(schema.solicitudesCurso)
+        .where(and(
+          eq(schema.solicitudesCurso.userId, ctx.user.id),
+          or(
+            eq(schema.solicitudesCurso.estado, "pendiente"),
+            eq(schema.solicitudesCurso.estado, "aprobada")
+          ),
+        ));
+      if (activasTotal.length >= 2) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Ya tienes 2 cursos activos. No puedes inscribirte a más.",
+        });
+      }
 
       const [cursoNuevo] = await d.select({ bloque: schema.cursos.bloque })
         .from(schema.cursos)
@@ -71,29 +93,30 @@ export const solicitudesRouter = router({
       return { success: true, id: resultado.id };
     }),
 
-  misSolicitudes: protectedProcedure.query(async ({ ctx }) => {
+  misSolicitudes: protectedProcedureSinRestriccion.query(async ({ ctx }) => {
     return listarSolicitudesUsuario(ctx.user.id);
   }),
 
   listar: adminProcedure
     .input(z.object({
       estado: z.string().optional(),
+      search: z.string().optional(),
       page: z.number().int().positive().default(1),
       limit: z.number().int().positive().max(100).default(20),
     }).optional())
     .query(async ({ input }) => {
-      return listarTodasSolicitudes({ estado: input?.estado, page: input?.page, limit: input?.limit });
+      return listarTodasSolicitudes({ estado: input?.estado, search: input?.search, page: input?.page, limit: input?.limit });
     }),
 
   exportarTodas: adminProcedure
-    .input(z.object({ estado: z.string().optional() }).optional())
+    .input(z.object({ estado: z.string().optional(), search: z.string().optional() }).optional())
     .query(async ({ input }) => {
-      return exportarTodasSolicitudes({ estado: input?.estado });
+      return exportarTodasSolicitudes({ estado: input?.estado, search: input?.search });
     }),
 
   // Reportes.tsx tambien la usa (consultor tiene acceso de solo lectura ahi),
-  // por eso protectedProcedure + check manual en vez de adminProcedure.
-  porCurso: protectedProcedure.query(async ({ ctx }) => {
+  // por eso protectedProcedureSinRestriccion + check manual en vez de adminProcedure.
+  porCurso: protectedProcedureSinRestriccion.query(async ({ ctx }) => {
     if (ctx.user.role !== "admin" && ctx.user.role !== "consultor") {
       throw new TRPCError({ code: "FORBIDDEN", message: "No tienes permisos para esta acción" });
     }
@@ -184,7 +207,7 @@ export const solicitudesRouter = router({
     }),
 
   // Progreso de acreditación del usuario: cuántos cursos completó y cuántos aprobó
-  progresoAcreditacion: protectedProcedure.query(async ({ ctx }) => {
+  progresoAcreditacion: protectedProcedureSinRestriccion.query(async ({ ctx }) => {
     const d = await getDb();
     const completadas = await d.select({
       calificacion: schema.solicitudesCurso.calificacion,
