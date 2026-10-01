@@ -1167,6 +1167,14 @@ export async function programarVentanaModuloInconformidad(
   });
 }
 
+// Solo para armar el s3Key legible de la subida de PDF (ver presignarSubida)
+// -- ctx.user (payload del JWT) no trae curp, users si.
+export async function obtenerCurpUsuario(userId: number): Promise<string | null> {
+  const d = await getDb();
+  const [fila] = await d.select({ curp: schema.users.curp }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
+  return fila?.curp ?? null;
+}
+
 export async function obtenerInconformidad(userId: number) {
   const d = await getDb();
   const [cabecera] = await d.select().from(schema.inconformidades)
