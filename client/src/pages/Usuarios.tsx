@@ -50,7 +50,7 @@ export default function Usuarios() {
 
   const { data, isLoading } = trpc.usuarios.listar.useQuery(
     { search: search || undefined, estatus: estatusFilter || undefined, page },
-    { retry: false }
+    { retry: false, placeholderData: (prev) => prev }
   );
   const usuarios = data?.items;
 

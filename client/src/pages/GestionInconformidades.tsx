@@ -36,7 +36,10 @@ export default function GestionInconformidades() {
   const [descargandoZip, setDescargandoZip] = useState<{ hecho: number; total: number } | null>(null);
   const [verDetalle, setVerDetalle] = useState<number | null>(null);
 
-  const { data: casos, isLoading } = trpc.inconformidad.listarAdmin.useQuery({ factor: filtroFactor as any });
+  const { data: casos, isLoading } = trpc.inconformidad.listarAdmin.useQuery(
+    { factor: filtroFactor as any },
+    { placeholderData: (prev) => prev },
+  );
   const { data: config } = trpc.inconformidad.factoresDisponibles.useQuery();
 
   const toggleMut = trpc.inconformidad.actualizarConfigFactor.useMutation({

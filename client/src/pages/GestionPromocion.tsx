@@ -70,7 +70,10 @@ export default function GestionPromocion() {
   const [quitando, setQuitando] = useState<{ curp: string; rol: RolPool; nombre: string } | null>(null);
   const [exportando, setExportando] = useState<"excel" | "pdf" | null>(null);
 
-  const { data, isLoading } = trpc.promocion.listarInscripciones.useQuery({ search: search || undefined, page, limit: 20 });
+  const { data, isLoading } = trpc.promocion.listarInscripciones.useQuery(
+    { search: search || undefined, page, limit: 20 },
+    { placeholderData: (prev) => prev },
+  );
   const { data: correosFallidos } = trpc.promocion.listarCorreosFallidos.useQuery();
   const { data: pool, isLoading: poolCargando } = trpc.promocion.listarPool.useQuery(
     { rol: tabPool, search: searchPool || undefined, page: pagePool, limit: 20 },

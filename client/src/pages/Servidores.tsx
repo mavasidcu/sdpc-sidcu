@@ -17,6 +17,7 @@ import {
   FileText,
 } from "lucide-react";
 import { exportarExcel, exportarPDF } from "@/lib/exportar";
+import { Skeleton } from "@/components/Skeleton";
 
 type ModalState =
   | { type: "closed" }
@@ -45,15 +46,18 @@ export default function Servidores() {
   const { data: upas } = trpc.servidores.listarUpas.useQuery();
   const { data: uas } = trpc.servidores.listarUas.useQuery();
 
-  const { data, isLoading } = trpc.servidores.listar.useQuery({
-    search: search || undefined,
-    dependencia: dependencia || undefined,
-    nivel: "federal",
-    estatus: estatus || undefined,
-    grupoFuncion: grupoFuncion || undefined,
-    page,
-    limit: 20,
-  });
+  const { data, isLoading } = trpc.servidores.listar.useQuery(
+    {
+      search: search || undefined,
+      dependencia: dependencia || undefined,
+      nivel: "federal",
+      estatus: estatus || undefined,
+      grupoFuncion: grupoFuncion || undefined,
+      page,
+      limit: 20,
+    },
+    { placeholderData: (prev) => prev },
+  );
 
   const crearMut = trpc.servidores.crear.useMutation({
     onSuccess: () => {
@@ -371,11 +375,18 @@ export default function Servidores() {
           </thead>
           <tbody className="divide-y">
             {isLoading ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                  Cargando...
-                </td>
-              </tr>
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i}>
+                  {canDelete && <td className="px-3 py-3"><Skeleton className="h-4 w-4" /></td>}
+                  <td className="px-4 py-3"><Skeleton className="h-3 w-32" /></td>
+                  <td className="hidden px-4 py-3 lg:table-cell"><Skeleton className="h-3 w-24" /></td>
+                  <td className="hidden px-4 py-3 xl:table-cell"><Skeleton className="h-3 w-28" /></td>
+                  <td className="hidden px-4 py-3 xl:table-cell"><Skeleton className="h-3 w-24" /></td>
+                  <td className="hidden px-4 py-3 xl:table-cell"><Skeleton className="h-3 w-28" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                  {(canEdit || canDelete) && <td className="px-4 py-3"><Skeleton className="h-6 w-16" /></td>}
+                </tr>
+              ))
             ) : !data?.items.length ? (
               <tr>
                 <td colSpan={8} className="px-4 py-8 text-center text-gray-500">

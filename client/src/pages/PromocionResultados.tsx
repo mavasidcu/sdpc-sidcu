@@ -37,13 +37,16 @@ export default function PromocionResultados() {
   const [exportando, setExportando] = useState<"excel" | "pdf" | null>(null);
   const [expandido, setExpandido] = useState<number | null>(null);
 
-  const { data, isLoading } = trpc.promocion.listarResultados.useQuery({
-    search: search || undefined,
-    estado: estado || undefined,
-    ordenTotal,
-    page,
-    limit: 20,
-  });
+  const { data, isLoading } = trpc.promocion.listarResultados.useQuery(
+    {
+      search: search || undefined,
+      estado: estado || undefined,
+      ordenTotal,
+      page,
+      limit: 20,
+    },
+    { placeholderData: (prev) => prev },
+  );
 
   const utils = trpc.useUtils();
   const inputClass = "rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20";
