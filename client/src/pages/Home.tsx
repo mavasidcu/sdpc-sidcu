@@ -19,8 +19,8 @@ export default function Home() {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center text-center"
         >
-          <img src="/joven-mexicana.png" alt="Joven Mexicana" className="h-[140px] w-auto object-contain sm:h-[200px]" />
-          <img src="/gobierno.png" alt="Gobierno de México" className="mt-6 h-20 w-auto object-contain sm:h-25" />
+          <img src="/joven-mexicana.png" alt="Joven Mexicana" width={632} height={630} className="h-[140px] w-auto object-contain sm:h-[200px]" />
+          <img src="/gobierno.png" alt="Gobierno de México" width={383} height={138} className="mt-6 h-20 w-auto object-contain sm:h-25" />
         </motion.div>
         <div className="mt-6 w-full max-w-xs">
           <div className="h-px w-full bg-inst-gray/20" />
@@ -48,6 +48,8 @@ export default function Home() {
             <img
               src="/logo-secretaria-cultura.jpeg"
               alt="Secretaría de Cultura"
+              width={1190}
+              height={374}
               className="h-8 w-auto object-contain"
             />
           </motion.div>
@@ -60,6 +62,8 @@ export default function Home() {
           <motion.img
             src="/joven-mexicana.png"
             alt="Joven Mexicana"
+            width={632}
+            height={630}
             className="max-h-[32vh] w-auto object-contain"
             style={{ mixBlendMode: "multiply" }}
             initial={{ opacity: 0, scale: 0.9 }}
@@ -70,6 +74,8 @@ export default function Home() {
           <motion.img
             src="/logo-secretaria-cultura.jpeg"
             alt="Secretaría de Cultura"
+            width={1190}
+            height={374}
             className="mt-4 max-h-[8vh] w-auto object-contain"
             style={{ mixBlendMode: "multiply" }}
             initial={{ opacity: 0, y: 12 }}

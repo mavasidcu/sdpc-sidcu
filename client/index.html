@@ -7,6 +7,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Serif:wght@400;700&display=swap" rel="stylesheet" />
+    <!-- Precarga de Home.tsx (pagina de entrada publica) -- sin esto, framer-motion
+         anima el wrapper al montar (instantaneo) mientras la imagen real sigue
+         bajando por red, y aparece deshilvanada (se leia como cascada). -->
+    <link rel="preload" as="image" href="/joven-mexicana.png" fetchpriority="high" />
+    <link rel="preload" as="image" href="/logo-secretaria-cultura.jpeg" fetchpriority="high" />
+    <link rel="preload" as="image" href="/gobierno.png" />
     <title>SIDCU — Sistema Informático de SPDC</title>
   </head>
   <body>
