@@ -1,4 +1,5 @@
 import { drizzle } from "drizzle-orm/mysql2";
+import type { MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { eq, and, like, or, sql, desc, inArray, getTableColumns } from "drizzle-orm";
 import * as schema from "../drizzle/schema";
@@ -6,7 +7,7 @@ import type { InsertServidorPublico, InsertAuditoria } from "../drizzle/schema";
 import { dbCircuitBreaker } from "./middleware/circuitBreaker";
 import { CALIFICACION_APROBATORIA, CURSOS_REQUERIDOS_ACREDITACION } from "../shared/const";
 
-let db: ReturnType<typeof drizzle> | null = null;
+let db: (MySql2Database<typeof schema> & { $client: mysql.Pool }) | null = null;
 let pool: mysql.Pool | null = null;
 
 export async function getDb() {
@@ -261,10 +262,37 @@ export async function resetearPasswordUsuario(id: number, passwordHash: string) 
 // El servidor público asociado no se borra — se desvincula y marca inactivo.
 // ─── Servidores Públicos ─────────────────────────────────────────────
 
+// Señal tipada de "RFC o CURP duplicado" para que el router (o el loop de
+// importación CSV) la traduzca a un mensaje de negocio real, sin adivinar
+// buscando texto dentro de `err.message` -- eso ya estaba roto: drizzle-orm
+// envuelve el error real de mysql2 en un DrizzleQueryError cuyo `.message`
+// es solo "Failed query: insert into ...", nunca el texto "Duplicate entry"
+// (verificado en vivo). El código y el sqlMessage reales viven en `.cause`.
+export class ServidorDuplicadoError extends Error {
+  constructor(public readonly campo: "rfc" | "curp") {
+    super(`Servidor duplicado por ${campo}`);
+    this.name = "ServidorDuplicadoError";
+  }
+}
+
+function campoDuplicadoServidor(err: unknown): "rfc" | "curp" | null {
+  if (codigoMysql(err) !== "ER_DUP_ENTRY") return null;
+  const sqlMessage = (err as any)?.sqlMessage ?? (err as any)?.cause?.sqlMessage ?? "";
+  if (sqlMessage.includes("_rfc_unique")) return "rfc";
+  if (sqlMessage.includes("_curp_unique")) return "curp";
+  return null;
+}
+
 export async function crearServidor(data: InsertServidorPublico) {
   const d = await getDb();
-  const [result] = await d.insert(schema.servidoresPublicos).values(data);
-  return result.insertId;
+  try {
+    const [result] = await d.insert(schema.servidoresPublicos).values(data);
+    return result.insertId;
+  } catch (err) {
+    const campo = campoDuplicadoServidor(err);
+    if (campo) throw new ServidorDuplicadoError(campo);
+    throw err;
+  }
 }
 
 export async function listarServidores(filtros?: {
@@ -354,10 +382,16 @@ export async function actualizarServidor(
   data: Partial<InsertServidorPublico>,
 ) {
   const d = await getDb();
-  await d
-    .update(schema.servidoresPublicos)
-    .set({ ...data, updatedAt: new Date() })
-    .where(eq(schema.servidoresPublicos.id, id));
+  try {
+    await d
+      .update(schema.servidoresPublicos)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.servidoresPublicos.id, id));
+  } catch (err) {
+    const campo = campoDuplicadoServidor(err);
+    if (campo) throw new ServidorDuplicadoError(campo);
+    throw err;
+  }
 }
 
 export async function eliminarServidor(id: number) {
@@ -1028,4 +1062,516 @@ export async function contarAprobacionPorBloque() {
       return a - b;
     })
     .map(([bloque, counts]) => ({ bloque, ...counts }));
+}
+
+// ─── Inconformidad ───────────────────────────────────────────────────
+
+export async function obtenerFactoresConfig() {
+  const d = await getDb();
+  return d.select().from(schema.factoresInconformidadConfig);
+}
+
+export async function obtenerEstadoInconformidad(userId: number): Promise<"borrador" | "enviado" | null> {
+  const d = await getDb();
+  const [cabecera] = await d.select({ estado: schema.inconformidades.estado })
+    .from(schema.inconformidades)
+    .where(eq(schema.inconformidades.userId, userId));
+  return cabecera?.estado ?? null;
+}
+
+// ─── Config del modulo Inconformidad (Centro de Modulos) ──────────────
+
+export async function obtenerConfigModuloInconformidad() {
+  const d = await getDb();
+  const [row] = await d.select({
+    id: schema.inconformidadModuloConfig.id,
+    habilitado: schema.inconformidadModuloConfig.habilitado,
+    fechaDesde: schema.inconformidadModuloConfig.fechaDesde,
+    fechaHasta: schema.inconformidadModuloConfig.fechaHasta,
+    actualizadoPor: schema.inconformidadModuloConfig.actualizadoPor,
+    actualizadoPorNombre: schema.users.nombre,
+    updatedAt: schema.inconformidadModuloConfig.updatedAt,
+  })
+    .from(schema.inconformidadModuloConfig)
+    .leftJoin(schema.users, eq(schema.users.id, schema.inconformidadModuloConfig.actualizadoPor))
+    .where(eq(schema.inconformidadModuloConfig.id, 1));
+  if (row) return row;
+  // Defensivo: si el seed nunca corrio, no romper el modulo ya en uso --
+  // se comporta como si estuviera habilitado (mismo estado que tenia antes
+  // de que existiera este control).
+  return { id: 1, habilitado: true, fechaDesde: null, fechaHasta: null, actualizadoPor: null, actualizadoPorNombre: null, updatedAt: new Date() };
+}
+
+// Pura, sin DB -- si logra probarse aislada, cubre el caso mas propenso a
+// errores de este feature (comparacion de fechas) sin necesidad de mocks.
+export function moduloEstaHabilitadoAhora(
+  config: Pick<schema.InconformidadModuloConfig, "habilitado" | "fechaDesde" | "fechaHasta">,
+  ahora: Date = new Date(),
+): boolean {
+  if (config.fechaDesde && config.fechaHasta) {
+    // Comparacion de fecha pura (YYYY-MM-DD) contra el dia calendario en
+    // America/Mexico_City -- fijo a mano, NUNCA a la timezone del proceso.
+    // Si el host termina corriendo en UTC (default comun de contenedores,
+    // ej. Railway) usar getFullYear/getMonth/getDate del proceso correria la
+    // ventana hasta 6 horas alrededor de medianoche real de Mexico. Mexico
+    // abolio el horario de verano en 2022 -- el offset UTC-6 es fijo todo el
+    // año, sin ambiguedad de DST.
+    const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(ahora);
+    return hoy >= config.fechaDesde && hoy <= config.fechaHasta;
+  }
+  return config.habilitado;
+}
+
+export async function moduloInconformidadHabilitado(): Promise<boolean> {
+  const config = await obtenerConfigModuloInconformidad();
+  return moduloEstaHabilitadoAhora(config);
+}
+
+export async function actualizarModuloInconformidadManual(habilitado: boolean, adminUserId: number): Promise<void> {
+  const d = await getDb();
+  await d.transaction(async (tx) => {
+    // Tocar el switch a mano SIEMPRE cancela cualquier ventana programada y
+    // pasa a control manual puro (decision confirmada con el cliente) --
+    // sin esto, un admin que "apaga" durante una ventana activa veria que
+    // no pasa nada (la ventana seguiria mandando).
+    await tx.update(schema.inconformidadModuloConfig)
+      .set({ habilitado, fechaDesde: null, fechaHasta: null, actualizadoPor: adminUserId })
+      .where(eq(schema.inconformidadModuloConfig.id, 1));
+
+    await tx.insert(schema.auditoria).values({
+      servidorId: null,
+      usuarioId: adminUserId,
+      accion: "actualizar",
+      descripcion: `Módulo Inconformidad ${habilitado ? "activado" : "desactivado"} manualmente (cancela ventana programada si había una)`,
+    });
+  });
+}
+
+export async function programarVentanaModuloInconformidad(
+  fechaDesde: string,
+  fechaHasta: string,
+  adminUserId: number,
+): Promise<void> {
+  const d = await getDb();
+  await d.transaction(async (tx) => {
+    await tx.update(schema.inconformidadModuloConfig)
+      .set({ fechaDesde, fechaHasta, actualizadoPor: adminUserId })
+      .where(eq(schema.inconformidadModuloConfig.id, 1));
+
+    await tx.insert(schema.auditoria).values({
+      servidorId: null,
+      usuarioId: adminUserId,
+      accion: "actualizar",
+      descripcion: `Módulo Inconformidad: ventana programada del ${fechaDesde} al ${fechaHasta}`,
+    });
+  });
+}
+
+export async function obtenerInconformidad(userId: number) {
+  const d = await getDb();
+  const [cabecera] = await d.select().from(schema.inconformidades)
+    .where(eq(schema.inconformidades.userId, userId));
+  if (!cabecera) return null;
+
+  const factores = await d.select({
+    id: schema.inconformidadFactores.id,
+    factor: schema.inconformidadFactores.factor,
+    mensaje: schema.inconformidadFactores.mensaje,
+    archivoId: schema.inconformidadFactores.archivoId,
+    nombreOriginal: schema.archivosCargados.nombreOriginal,
+  })
+    .from(schema.inconformidadFactores)
+    .leftJoin(schema.archivosCargados, eq(schema.archivosCargados.id, schema.inconformidadFactores.archivoId))
+    .where(eq(schema.inconformidadFactores.inconformidadId, cabecera.id));
+
+  return { ...cabecera, factores };
+}
+
+// Codigos de MySQL que significan "otra transaccion concurrente gano la
+// carrera o hubo un deadlock detectado por InnoDB" -- en ambos casos la
+// transaccion completa ya se aborto server-side (un deadlock la mata entera,
+// no solo el statement que fallo), asi que la unica recuperacion correcta es
+// reintentar la funcion completa desde cero, no "seguir" dentro de la misma
+// transaccion muerta.
+const CODIGOS_MYSQL_REINTENTABLES = new Set(["ER_DUP_ENTRY", "ER_LOCK_DEADLOCK", "ER_LOCK_WAIT_TIMEOUT"]);
+
+// drizzle-orm envuelve el error real de mysql2 en un DrizzleQueryError y lo
+// deja en `.cause` (verificado contra node_modules/drizzle-orm/errors) --
+// `err.code` esta undefined, el codigo real vive en `err.cause.code`.
+function codigoMysql(err: unknown): string | undefined {
+  return (err as any)?.code ?? (err as any)?.cause?.code;
+}
+
+// Las 4 transacciones de escritura de Inconformidad (guardar/quitar factor,
+// confirmar subida, enviar) toman `.for("update")` sobre la fila cabecera del
+// usuario -- cualquiera puede toparse con un deadlock o timeout de lock real
+// (ej. dos pestañas del mismo usuario operando a la vez), no solo el primer
+// guardado. Un deadlock aborta la transaccion COMPLETA server-side, asi que
+// la unica recuperacion correcta es reintentar la funcion entera desde cero
+// -- verificado con una prueba de concurrencia real contra MySQL, ver ledger.
+async function conReintentoDeadlock<T>(intentar: () => Promise<T>): Promise<T> {
+  const MAX_INTENTOS = 3;
+  for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+    try {
+      return await intentar();
+    } catch (err: any) {
+      const codigo = codigoMysql(err);
+      if (codigo && CODIGOS_MYSQL_REINTENTABLES.has(codigo) && intento < MAX_INTENTOS) continue;
+      throw err;
+    }
+  }
+  // Inalcanzable (el loop siempre retorna o lanza en su ultima vuelta), solo
+  // para que TypeScript vea una funcion que siempre retorna algo.
+  throw new Error("conReintentoDeadlock: agoto reintentos sin exito ni error");
+}
+
+export async function guardarFactorInconformidad(
+  userId: number,
+  factor: (typeof schema.FACTORES_INCONFORMIDAD)[number],
+  mensaje: string,
+): Promise<{ ok: true; id: number } | { ok: false; error: "YA_ENVIADA" | "FACTOR_DESHABILITADO" }> {
+  const d = await getDb();
+  return conReintentoDeadlock(() => intentarGuardarFactorInconformidad(d, userId, factor, mensaje));
+}
+
+async function intentarGuardarFactorInconformidad(
+  d: Awaited<ReturnType<typeof getDb>>,
+  userId: number,
+  factor: (typeof schema.FACTORES_INCONFORMIDAD)[number],
+  mensaje: string,
+): Promise<{ ok: true; id: number } | { ok: false; error: "YA_ENVIADA" | "FACTOR_DESHABILITADO" }> {
+  return d.transaction(async (tx) => {
+    const [cabeceraExistente] = await tx.select().from(schema.inconformidades)
+      .where(eq(schema.inconformidades.userId, userId))
+      .for("update");
+
+    if (cabeceraExistente && cabeceraExistente.estado !== "borrador") {
+      return { ok: false, error: "YA_ENVIADA" };
+    }
+
+    let factorExistente: typeof schema.inconformidadFactores.$inferSelect | undefined;
+    if (cabeceraExistente) {
+      [factorExistente] = await tx.select().from(schema.inconformidadFactores)
+        .where(and(
+          eq(schema.inconformidadFactores.inconformidadId, cabeceraExistente.id),
+          eq(schema.inconformidadFactores.factor, factor),
+        ));
+    }
+
+    if (!factorExistente) {
+      const [config] = await tx.select().from(schema.factoresInconformidadConfig)
+        .where(eq(schema.factoresInconformidadConfig.factor, factor));
+      if (!config?.habilitado) {
+        return { ok: false, error: "FACTOR_DESHABILITADO" };
+      }
+    }
+
+    let cabeceraId: number;
+    if (cabeceraExistente) {
+      cabeceraId = cabeceraExistente.id;
+    } else {
+      const [ins] = await tx.insert(schema.inconformidades).values({ userId });
+      cabeceraId = ins.insertId;
+    }
+
+    let factorId: number;
+    if (factorExistente) {
+      await tx.update(schema.inconformidadFactores)
+        .set({ mensaje })
+        .where(eq(schema.inconformidadFactores.id, factorExistente.id));
+      factorId = factorExistente.id;
+    } else {
+      const [ins] = await tx.insert(schema.inconformidadFactores)
+        .values({ inconformidadId: cabeceraId, factor, mensaje });
+      factorId = ins.insertId;
+    }
+
+    const [servidor] = await tx.select({ id: schema.servidoresPublicos.id })
+      .from(schema.servidoresPublicos)
+      .where(eq(schema.servidoresPublicos.userId, userId));
+
+    await tx.insert(schema.auditoria).values({
+      servidorId: servidor?.id ?? null,
+      usuarioId: userId,
+      accion: factorExistente ? "actualizar" : "crear",
+      descripcion: `Inconformidad: ${factorExistente ? "editó el texto del" : "agregó el"} factor "${factor}"`,
+    });
+
+    return { ok: true, id: factorId };
+  });
+}
+
+export async function quitarFactorInconformidad(
+  userId: number,
+  factorId: number,
+): Promise<{ ok: true; s3KeyBorrado: string | null } | { ok: false; error: "YA_ENVIADA" | "NO_ENCONTRADO" }> {
+  const d = await getDb();
+  return conReintentoDeadlock(() => intentarQuitarFactorInconformidad(d, userId, factorId));
+}
+
+async function intentarQuitarFactorInconformidad(
+  d: Awaited<ReturnType<typeof getDb>>,
+  userId: number,
+  factorId: number,
+): Promise<{ ok: true; s3KeyBorrado: string | null } | { ok: false; error: "YA_ENVIADA" | "NO_ENCONTRADO" }> {
+  return d.transaction(async (tx) => {
+    const [cabecera] = await tx.select().from(schema.inconformidades)
+      .where(eq(schema.inconformidades.userId, userId))
+      .for("update");
+    if (!cabecera) return { ok: false, error: "NO_ENCONTRADO" };
+    if (cabecera.estado !== "borrador") return { ok: false, error: "YA_ENVIADA" };
+
+    const [factor] = await tx.select().from(schema.inconformidadFactores)
+      .where(and(
+        eq(schema.inconformidadFactores.id, factorId),
+        eq(schema.inconformidadFactores.inconformidadId, cabecera.id),
+      ));
+    if (!factor) return { ok: false, error: "NO_ENCONTRADO" };
+
+    let s3KeyBorrado: string | null = null;
+    if (factor.archivoId) {
+      const [archivo] = await tx.select({ s3Key: schema.archivosCargados.s3Key })
+        .from(schema.archivosCargados)
+        .where(eq(schema.archivosCargados.id, factor.archivoId));
+      s3KeyBorrado = archivo?.s3Key ?? null;
+      await tx.delete(schema.archivosCargados).where(eq(schema.archivosCargados.id, factor.archivoId));
+    }
+
+    await tx.delete(schema.inconformidadFactores).where(eq(schema.inconformidadFactores.id, factorId));
+
+    const [servidor] = await tx.select({ id: schema.servidoresPublicos.id })
+      .from(schema.servidoresPublicos)
+      .where(eq(schema.servidoresPublicos.userId, userId));
+
+    await tx.insert(schema.auditoria).values({
+      servidorId: servidor?.id ?? null,
+      usuarioId: userId,
+      accion: "eliminar",
+      descripcion: `Inconformidad: eliminó el factor "${factor.factor}"${s3KeyBorrado ? " (incluía PDF)" : ""}`,
+    });
+
+    return { ok: true, s3KeyBorrado };
+  });
+}
+
+export async function crearArchivoPendiente(
+  cargadoPor: number,
+  nombreOriginal: string,
+  tipoArchivo: string,
+  tamanoBytes: number,
+  s3Key: string,
+): Promise<{ id: number }> {
+  const d = await getDb();
+  const [ins] = await d.insert(schema.archivosCargados).values({
+    nombreOriginal,
+    tipoArchivo,
+    tamanoBytes,
+    s3Key,
+    s3Url: `s3://${process.env.AWS_S3_BUCKET}/${s3Key}`,
+    cargadoPor,
+  });
+  return { id: ins.insertId };
+}
+
+export async function obtenerArchivoPorId(archivoId: number) {
+  const d = await getDb();
+  const [archivo] = await d.select().from(schema.archivosCargados)
+    .where(eq(schema.archivosCargados.id, archivoId));
+  return archivo ?? null;
+}
+
+export async function borrarArchivoPendiente(archivoId: number, userId: number): Promise<void> {
+  const d = await getDb();
+  await d.delete(schema.archivosCargados)
+    .where(and(eq(schema.archivosCargados.id, archivoId), eq(schema.archivosCargados.cargadoPor, userId)));
+}
+
+export async function confirmarSubidaInconformidad(
+  userId: number,
+  factorId: number,
+  archivoId: number,
+): Promise<{ ok: true; s3KeyViejo: string | null } | { ok: false; error: "YA_ENVIADA" | "FACTOR_NO_ENCONTRADO" | "ARCHIVO_NO_ES_TUYO" }> {
+  const d = await getDb();
+  return conReintentoDeadlock(() => intentarConfirmarSubidaInconformidad(d, userId, factorId, archivoId));
+}
+
+async function intentarConfirmarSubidaInconformidad(
+  d: Awaited<ReturnType<typeof getDb>>,
+  userId: number,
+  factorId: number,
+  archivoId: number,
+): Promise<{ ok: true; s3KeyViejo: string | null } | { ok: false; error: "YA_ENVIADA" | "FACTOR_NO_ENCONTRADO" | "ARCHIVO_NO_ES_TUYO" }> {
+  return d.transaction(async (tx) => {
+    const [cabecera] = await tx.select().from(schema.inconformidades)
+      .where(eq(schema.inconformidades.userId, userId))
+      .for("update");
+    if (!cabecera) return { ok: false, error: "FACTOR_NO_ENCONTRADO" };
+    if (cabecera.estado !== "borrador") return { ok: false, error: "YA_ENVIADA" };
+
+    const [factor] = await tx.select().from(schema.inconformidadFactores)
+      .where(and(
+        eq(schema.inconformidadFactores.id, factorId),
+        eq(schema.inconformidadFactores.inconformidadId, cabecera.id),
+      ));
+    if (!factor) return { ok: false, error: "FACTOR_NO_ENCONTRADO" };
+
+    if (factor.archivoId !== archivoId) {
+      const [archivoNuevo] = await tx.select({ cargadoPor: schema.archivosCargados.cargadoPor })
+        .from(schema.archivosCargados)
+        .where(eq(schema.archivosCargados.id, archivoId));
+      if (!archivoNuevo || archivoNuevo.cargadoPor !== userId) {
+        return { ok: false, error: "ARCHIVO_NO_ES_TUYO" };
+      }
+    }
+
+    let s3KeyViejo: string | null = null;
+    if (factor.archivoId) {
+      const [archivoViejo] = await tx.select({ s3Key: schema.archivosCargados.s3Key })
+        .from(schema.archivosCargados)
+        .where(eq(schema.archivosCargados.id, factor.archivoId));
+      s3KeyViejo = archivoViejo?.s3Key ?? null;
+      await tx.delete(schema.archivosCargados).where(eq(schema.archivosCargados.id, factor.archivoId));
+    }
+
+    await tx.update(schema.inconformidadFactores)
+      .set({ archivoId })
+      .where(eq(schema.inconformidadFactores.id, factorId));
+
+    const [servidor] = await tx.select({ id: schema.servidoresPublicos.id })
+      .from(schema.servidoresPublicos)
+      .where(eq(schema.servidoresPublicos.userId, userId));
+
+    await tx.insert(schema.auditoria).values({
+      servidorId: servidor?.id ?? null,
+      usuarioId: userId,
+      accion: "actualizar",
+      descripcion: `Inconformidad: ${s3KeyViejo ? "reemplazó" : "subió"} el PDF del factor "${factor.factor}"`,
+    });
+
+    return { ok: true, s3KeyViejo };
+  });
+}
+
+export async function obtenerArchivoParaDescarga(archivoId: number) {
+  const d = await getDb();
+  const [row] = await d.select({
+    s3Key: schema.archivosCargados.s3Key,
+    nombreOriginal: schema.archivosCargados.nombreOriginal,
+    cargadoPor: schema.archivosCargados.cargadoPor,
+    userIdDueno: schema.inconformidades.userId,
+    estadoInconformidad: schema.inconformidades.estado,
+    servidorIdDueno: schema.servidoresPublicos.id,
+  })
+    .from(schema.archivosCargados)
+    .leftJoin(schema.inconformidadFactores, eq(schema.inconformidadFactores.archivoId, schema.archivosCargados.id))
+    .leftJoin(schema.inconformidades, eq(schema.inconformidades.id, schema.inconformidadFactores.inconformidadId))
+    .leftJoin(schema.servidoresPublicos, eq(schema.servidoresPublicos.userId, schema.inconformidades.userId))
+    .where(eq(schema.archivosCargados.id, archivoId));
+  return row ?? null;
+}
+
+export async function enviarInconformidad(
+  userId: number,
+): Promise<{ ok: true } | { ok: false; error: "YA_ENVIADA" | "SIN_FACTORES" | "NO_INICIADA" }> {
+  const d = await getDb();
+  return conReintentoDeadlock(() => intentarEnviarInconformidad(d, userId));
+}
+
+async function intentarEnviarInconformidad(
+  d: Awaited<ReturnType<typeof getDb>>,
+  userId: number,
+): Promise<{ ok: true } | { ok: false; error: "YA_ENVIADA" | "SIN_FACTORES" | "NO_INICIADA" }> {
+  return d.transaction(async (tx) => {
+    const [cabecera] = await tx.select().from(schema.inconformidades)
+      .where(eq(schema.inconformidades.userId, userId))
+      .for("update");
+    if (!cabecera) return { ok: false, error: "NO_INICIADA" };
+    if (cabecera.estado !== "borrador") return { ok: false, error: "YA_ENVIADA" };
+
+    const factores = await tx.select({ id: schema.inconformidadFactores.id })
+      .from(schema.inconformidadFactores)
+      .where(eq(schema.inconformidadFactores.inconformidadId, cabecera.id));
+    if (factores.length === 0) return { ok: false, error: "SIN_FACTORES" };
+
+    await tx.update(schema.inconformidades)
+      .set({ estado: "enviado", enviadoAt: new Date() })
+      .where(eq(schema.inconformidades.id, cabecera.id));
+
+    const [servidor] = await tx.select({ id: schema.servidoresPublicos.id })
+      .from(schema.servidoresPublicos)
+      .where(eq(schema.servidoresPublicos.userId, userId));
+
+    await tx.insert(schema.auditoria).values({
+      servidorId: servidor?.id ?? null,
+      usuarioId: userId,
+      accion: "actualizar",
+      descripcion: `Inconformidad: envió su inconformidad con ${factores.length} factor(es)`,
+    });
+
+    return { ok: true };
+  });
+}
+
+export async function listarInconformidadesAdmin(filtroFactor?: string) {
+  const d = await getDb();
+  // Una sola query con joins (antes: 1 + N -- una por cada caso enviado).
+  // Mismo filtrado que antes: si filtroFactor viene, solo aparecen casos que
+  // tengan ese factor, y de esos casos solo se muestra ese factor (no los
+  // demas que tambien tengan guardados) -- se logra filtrando el join en vez
+  // de la cabecera.
+  const condiciones = filtroFactor
+    ? and(eq(schema.inconformidades.estado, "enviado"), eq(schema.inconformidadFactores.factor, filtroFactor as any))
+    : eq(schema.inconformidades.estado, "enviado");
+
+  const filas = await d.select({
+    id: schema.inconformidades.id,
+    enviadoAt: schema.inconformidades.enviadoAt,
+    nombreCompleto: schema.servidoresPublicos.nombreCompleto,
+    curp: schema.servidoresPublicos.curp,
+    factorId: schema.inconformidadFactores.id,
+    factor: schema.inconformidadFactores.factor,
+    mensaje: schema.inconformidadFactores.mensaje,
+    archivoId: schema.inconformidadFactores.archivoId,
+    nombreOriginal: schema.archivosCargados.nombreOriginal,
+  })
+    .from(schema.inconformidades)
+    .innerJoin(schema.servidoresPublicos, eq(schema.servidoresPublicos.userId, schema.inconformidades.userId))
+    .innerJoin(schema.inconformidadFactores, eq(schema.inconformidadFactores.inconformidadId, schema.inconformidades.id))
+    .leftJoin(schema.archivosCargados, eq(schema.archivosCargados.id, schema.inconformidadFactores.archivoId))
+    .where(condiciones);
+
+  const porCabecera = new Map<number, {
+    id: number; enviadoAt: Date; nombreCompleto: string; curp: string;
+    factores: { id: number; factor: string; mensaje: string; archivoId: number | null; nombreOriginal: string | null }[];
+  }>();
+  for (const fila of filas) {
+    let cab = porCabecera.get(fila.id);
+    if (!cab) {
+      cab = { id: fila.id, enviadoAt: fila.enviadoAt!, nombreCompleto: fila.nombreCompleto, curp: fila.curp, factores: [] };
+      porCabecera.set(fila.id, cab);
+    }
+    cab.factores.push({
+      id: fila.factorId, factor: fila.factor, mensaje: fila.mensaje,
+      archivoId: fila.archivoId, nombreOriginal: fila.nombreOriginal,
+    });
+  }
+  return [...porCabecera.values()];
+}
+
+export async function actualizarConfigFactorInconformidad(
+  factor: string,
+  habilitado: boolean,
+  adminUserId: number,
+): Promise<void> {
+  const d = await getDb();
+  await d.update(schema.factoresInconformidadConfig)
+    .set({ habilitado })
+    .where(eq(schema.factoresInconformidadConfig.factor, factor as any));
+
+  await d.insert(schema.auditoria).values({
+    servidorId: null,
+    usuarioId: adminUserId,
+    accion: "actualizar",
+    descripcion: `Inconformidad: ${habilitado ? "habilitó" : "inhabilitó"} el factor "${factor}" para nuevas selecciones`,
+  });
 }
