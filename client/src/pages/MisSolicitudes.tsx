@@ -40,14 +40,6 @@ export default function MisSolicitudes() {
 
   const isLoading = perfilLoading || solicitudesLoading;
 
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-      </div>
-    );
-  }
-
   return (
     <motion.div
       variants={stagger}
@@ -62,7 +54,11 @@ export default function MisSolicitudes() {
       </motion.div>
 
       {/* Solicitudes List */}
-      {!solicitudes?.length ? (
+      {isLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+        </div>
+      ) : !solicitudes?.length ? (
         <motion.div variants={fadeUp} className="rounded-2xl bg-white p-12 text-center shadow-card-rest border border-gray-100">
           <ClipboardList className="mx-auto h-12 w-12 text-gray-300" />
           <p className="mt-3 font-medium text-gray-600">No tienes solicitudes aun</p>

@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { stagger, fadeUp } from "@/lib/animations";
 import { trpc } from "@/lib/trpc";
+import { Skeleton, SkeletonCard } from "@/components/Skeleton";
 import {
   BarChart3,
   PieChart as PieIcon,
@@ -131,14 +132,6 @@ export default function Reportes() {
   );
   const { data: cursosPorInscritos } = trpc.solicitudes.porCurso.useQuery();
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-primary-500" />
-      </div>
-    );
-  }
-
   const activos = stats?.byEstatus?.find((e: any) => e.estatus === "activo")?.count ?? 0;
   const inactivos = stats?.byEstatus?.find((e: any) => e.estatus === "inactivo")?.count ?? 0;
   const total = stats?.total ?? 0;
@@ -195,6 +188,23 @@ export default function Reportes() {
         </div>
       </motion.div>
 
+      {isLoading ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+          <div className="bento-grid">
+            <Skeleton className="bento-md h-80" />
+            <Skeleton className="bento-md h-80" />
+          </div>
+          <Skeleton className="h-80 w-full" />
+          <div className="bento-grid">
+            <Skeleton className="bento-md h-80" />
+            <Skeleton className="bento-md h-80" />
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Summary stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -422,6 +432,8 @@ export default function Reportes() {
         </ChartCard>
         </div>
       </div>
+      </>
+      )}
     </motion.div>
   );
 }

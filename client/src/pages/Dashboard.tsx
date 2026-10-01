@@ -4,6 +4,7 @@ import { stagger, fadeUp } from "@/lib/animations";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { Skeleton } from "@/components/Skeleton";
 import {
   Users,
   UserCheck,
@@ -143,14 +144,6 @@ export default function Dashboard() {
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-primary-500" />
-      </div>
-    );
-  }
-
   return (
     <motion.div
       variants={stagger}
@@ -203,6 +196,12 @@ export default function Dashboard() {
       </div>
 
       {/* Charts */}
+      {isLoading ? (
+        <div className="bento-grid">
+          <Skeleton className="bento-md h-80" />
+          <Skeleton className="bento-md h-80" />
+        </div>
+      ) : (
       <div className="bento-grid">
         <div className="bento-md">
         <ChartCard title="Distribución por nivel de gobierno">
@@ -288,6 +287,7 @@ export default function Dashboard() {
         </ChartCard>
         </div>
       </div>
+      )}
     </motion.div>
   );
 }

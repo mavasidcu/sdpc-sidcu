@@ -214,9 +214,11 @@ export default function Onboarding() {
 
   if (perfilLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-primary-500" />
-      </div>
+      <motion.div variants={stagger} initial="hidden" animate="show" className="mx-auto max-w-2xl py-8 px-4">
+        <motion.div variants={fadeUp} className="flex min-h-[60vh] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-primary-500" />
+        </motion.div>
+      </motion.div>
     );
   }
 

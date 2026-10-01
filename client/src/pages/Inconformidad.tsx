@@ -107,9 +107,11 @@ export default function Inconformidad() {
 
   if (perfilLoading || configLoading || incLoading || moduloLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-      </div>
+      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+        <motion.div variants={fadeUp} className="flex h-64 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+        </motion.div>
+      </motion.div>
     );
   }
 
