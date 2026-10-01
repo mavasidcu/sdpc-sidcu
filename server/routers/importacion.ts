@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router } from "../trpc";
 import { protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { crearServidor, crearAuditoria, getDb } from "../db";
+import { crearServidor, crearAuditoria, getDb, ServidorDuplicadoError } from "../db";
 import { eq, or } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import { capitalizarNombre } from "../../shared/utils";
@@ -258,13 +258,22 @@ export const importacionRouter = router({
           });
 
           creados.push(id);
-        } catch (err: any) {
-          const msg = err.message ?? "Error desconocido";
-          let error = msg;
-          if (msg.includes("Duplicate")) {
-            if (msg.includes("rfc")) error = `RFC "${reg.data.rfc}" ya existe en el sistema`;
-            else if (msg.includes("curp")) error = `CURP "${reg.data.curp}" ya existe en el sistema`;
-            else error = "Registro duplicado (RFC o CURP ya existe)";
+        } catch (err) {
+          // Nota: antes esto buscaba "Duplicate" dentro de err.message, pero
+          // drizzle-orm envuelve el error real de mysql2 en un
+          // DrizzleQueryError cuyo .message es solo "Failed query: insert
+          // into ..." -- ese texto NUNCA contenía "Duplicate", así que esta
+          // rama jamás se activaba (verificado en vivo) y el admin veía la
+          // consulta SQL cruda en la lista de errores de importación.
+          // ServidorDuplicadoError es una señal tipada, no depende de texto.
+          let error: string;
+          if (err instanceof ServidorDuplicadoError) {
+            error = err.campo === "rfc"
+              ? `RFC "${reg.data.rfc}" ya existe en el sistema`
+              : `CURP "${reg.data.curp}" ya existe en el sistema`;
+          } else {
+            console.error(`Error inesperado importando fila ${i + 1}:`, err);
+            error = "Error inesperado al crear el registro";
           }
           errores.push({ fila: i + 1, error });
         }

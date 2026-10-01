@@ -15,7 +15,18 @@ import {
   getServidoresStats,
   crearAuditoria,
   listarAuditoria,
+  ServidorDuplicadoError,
 } from "../db";
+
+function manejarErrorDuplicado(err: unknown): never {
+  if (err instanceof ServidorDuplicadoError) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: err.campo === "rfc" ? "Ya existe un servidor público con ese RFC." : "Ya existe un servidor público con esa CURP.",
+    });
+  }
+  throw err;
+}
 
 // ─── Middleware helpers ──────────────────────────────────────────────
 
@@ -81,13 +92,18 @@ export const servidoresRouter = router({
   crear: requireRole("admin", "capturista")
     .input(servidorInput)
     .mutation(async ({ ctx, input }) => {
-      const id = await crearServidor({
-        ...input,
-        datosContacto: input.datosContacto ?? null,
-        observaciones: input.observaciones ?? null,
-        creadoPor: ctx.user.id,
-        actualizadoPor: ctx.user.id,
-      });
+      let id: number;
+      try {
+        id = await crearServidor({
+          ...input,
+          datosContacto: input.datosContacto ?? null,
+          observaciones: input.observaciones ?? null,
+          creadoPor: ctx.user.id,
+          actualizadoPor: ctx.user.id,
+        });
+      } catch (err) {
+        manejarErrorDuplicado(err);
+      }
 
       await crearAuditoria({
         servidorId: id,
@@ -132,10 +148,14 @@ export const servidoresRouter = router({
         });
       }
 
-      await actualizarServidor(id, {
-        ...data,
-        actualizadoPor: ctx.user.id,
-      });
+      try {
+        await actualizarServidor(id, {
+          ...data,
+          actualizadoPor: ctx.user.id,
+        });
+      } catch (err) {
+        manejarErrorDuplicado(err);
+      }
 
       await crearAuditoria({
         servidorId: id,
@@ -232,7 +252,11 @@ export const servidoresRouter = router({
   }),
 
   actividadReciente: requireRole("admin", "capturista", "consultor").query(async () => {
-    return listarAuditoria({ limit: 10 });
+    const resultado = await listarAuditoria({ limit: 10 });
+    return {
+      ...resultado,
+      items: resultado.items.map(({ cambiosAnteriores, cambiosPosterior, ...resto }) => resto),
+    };
   }),
 
   auditoria: requireRole("admin")
