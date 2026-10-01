@@ -7,6 +7,7 @@ import { ListChecks, Upload, Plus, Pencil, Trash2, X } from "lucide-react";
 import ImportarCSVModal from "@/components/ImportarCSVModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import { PREGUNTAS_AUTOEVALUACION } from "@shared/const";
+import { Skeleton } from "@/components/Skeleton";
 
 const COLUMNAS_IMPORT = [
   { key: "texto", label: "Texto de la pregunta", ejemplo: "¿Llegas puntual a tu jornada laboral?" },
@@ -132,7 +133,16 @@ export default function GestionAutoevaluacion() {
       <motion.div variants={fadeUp} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card-rest">
         <div>
           {cargandoPreguntas ? (
-            <div className="px-4 py-10 text-center text-sm text-gray-400">Cargando...</div>
+            <div className="divide-y divide-gray-100">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-2.5">
+                  <Skeleton className="h-3 w-5" />
+                  <Skeleton className="h-3 flex-1" />
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+              ))}
+            </div>
           ) : preguntas?.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-gray-400">Banco vacío — importa un CSV o crea una pregunta para empezar.</div>
           ) : (

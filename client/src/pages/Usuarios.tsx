@@ -8,6 +8,7 @@ import CrearUsuarioModal from "@/components/usuarios/CrearUsuarioModal";
 import ResetPasswordModal from "@/components/usuarios/ResetPasswordModal";
 import SolicitudesBajaSection from "@/components/usuarios/SolicitudesBajaSection";
 import { ROLE_CONFIG, ROLES } from "@/lib/roles";
+import { Skeleton } from "@/components/Skeleton";
 import {
   UserCog,
   Search,
@@ -184,8 +185,17 @@ export default function Usuarios() {
 
       {/* Users list */}
       {isLoading ? (
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-primary-500" />
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 rounded-2xl border border-slate-200/60 bg-white p-4 shadow-card-rest">
+              <Skeleton className="h-11 w-11 shrink-0 rounded-xl" />
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-3.5 w-1/3" />
+                <Skeleton className="mt-2 h-2.5 w-1/4" />
+              </div>
+              <Skeleton className="h-6 w-20 rounded-lg" />
+            </div>
+          ))}
         </div>
       ) : !usuarios?.length ? (
         <motion.div variants={fadeUp} className="flex flex-col items-center py-16 text-center">

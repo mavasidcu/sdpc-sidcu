@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import ImportarCSVModal from "@/components/ImportarCSVModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import { SkeletonCard } from "@/components/Skeleton";
 
 type ModalState =
   | { type: "closed" }
@@ -206,8 +207,8 @@ export default function Instituciones() {
 
       {/* Institution list */}
       {!displayInstituciones && isFetching ? (
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-primary-500" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : !displayInstituciones?.length ? (
         <motion.div variants={fadeUp} className="flex flex-col items-center py-16 text-center">

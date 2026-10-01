@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { fadeUp } from "@/lib/animations";
+import { stagger, fadeUp } from "@/lib/animations";
 import { trpc } from "@/lib/trpc";
+import { Skeleton } from "@/components/Skeleton";
 import {
   ClipboardList,
   Search,
@@ -22,13 +23,6 @@ const ACCION_CONFIG: Record<string, { icon: React.ElementType; bg: string; text:
   crear: { icon: Plus, bg: "bg-emerald-50", text: "text-emerald-600", label: "Creado" },
   actualizar: { icon: Pencil, bg: "bg-amber-50", text: "text-amber-600", label: "Actualizado" },
   eliminar: { icon: Trash2, bg: "bg-rose-50", text: "text-rose-600", label: "Eliminado" },
-};
-
-// Stagger propio (mas rapido que el default 0.05 de @/lib/animations) --
-// esta pantalla suele listar muchas filas de auditoria seguidas.
-const stagger = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.04 } },
 };
 
 function formatFecha(date: string | Date) {
@@ -141,8 +135,17 @@ export default function Auditoria() {
 
       {/* Timeline */}
       {isLoading ? (
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-primary-500" />
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex gap-4 rounded-2xl border border-slate-200/60 bg-white p-4 shadow-card-rest">
+              <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="mt-2 h-3.5 w-3/4" />
+                <Skeleton className="mt-2 h-2.5 w-40" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filteredItems.length === 0 ? (
         <motion.div

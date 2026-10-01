@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Search, ChevronRight, FileSpreadsheet, FileText } from "lucide-react";
 import { exportarResultadosPromocionExcel, exportarResultadosPromocionPDF } from "@/lib/exportar";
 import { formatearPuntaje } from "@shared/utils";
+import { Skeleton } from "@/components/Skeleton";
 
 function iniciales(nombre: string): string {
   const partes = nombre.trim().split(/\s+/);
@@ -148,7 +149,18 @@ export default function PromocionResultados() {
 
       <motion.div variants={fadeUp} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card-rest">
         {isLoading ? (
-          <div className="px-4 py-10 text-center text-sm text-gray-400">Cargando...</div>
+          Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="grid grid-cols-[34px_1.7fr_1fr_88px_18px] items-center gap-3.5 border-t border-gray-100 px-4.5 py-2.5 first:border-t-0">
+              <Skeleton className="h-8 w-8 rounded-[9px]" />
+              <div className="min-w-0 space-y-1.5">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-2.5 w-24" />
+              </div>
+              <Skeleton className="h-2.5 w-28" />
+              <Skeleton className="h-2.5 w-16 justify-self-end" />
+              <span />
+            </div>
+          ))
         ) : data?.items.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-gray-400">Sin resultados</div>
         ) : (
