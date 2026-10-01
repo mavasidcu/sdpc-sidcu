@@ -1,7 +1,28 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, X, FileSpreadsheet, Download, AlertTriangle, CheckCircle2 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { parseCSV } from "@/lib/csv";
+
+// XLSX.read (a diferencia de readFile/writeFile) SI esta disponible en el
+// build de navegador -- solo las variantes que tocan filesystem son
+// exclusivas de Node. defval:"" iguala el comportamiento de parseCSV (celda
+// vacia = cadena vacia, nunca undefined) y todo se vuelve string explicito
+// porque el resto del import (procesarFilas, camposHeredables, preview)
+// asume Record<string, string>, no los tipos mixtos que SheetJS regresa
+// para celdas numericas/fecha.
+function parseXLSX(buffer: ArrayBuffer): Record<string, string>[] {
+  const wb = XLSX.read(buffer, { type: "array" });
+  const hoja = wb.Sheets[wb.SheetNames[0]];
+  const filas = XLSX.utils.sheet_to_json<Record<string, unknown>>(hoja, { defval: "" });
+  return filas.map((row) => {
+    const limpio: Record<string, string> = {};
+    for (const [k, v] of Object.entries(row)) {
+      limpio[k] = v === null || v === undefined ? "" : String(v).trim();
+    }
+    return limpio;
+  });
+}
 
 interface ImportarCSVModalProps {
   titulo: string;
@@ -12,6 +33,11 @@ interface ImportarCSVModalProps {
   /** Campos que heredan el valor de la fila anterior cuando vienen vacíos
    *  (celdas combinadas de Excel exportadas a CSV dejan vacías las filas siguientes). */
   camposHeredables?: string[];
+  /** Transforma las filas ya parseadas ANTES de mostrarlas en el preview --
+   *  para aceptar archivos con encabezados reales distintos a `columnas`
+   *  (mayúsculas, columnas extra, nombre partido en varias celdas) sin tocar
+   *  el contrato que espera `onImportar`. Se aplica después de camposHeredables. */
+  procesarFilas?: (registros: Record<string, string>[]) => Record<string, string>[];
   /** Slot opcional para controles extra (ej. selector de programa) que
    *  aparecen junto al preview, después de subir el archivo -- un solo
    *  lugar para elegir configuración del import, no un selector aparte
@@ -36,19 +62,29 @@ function aplicarFillDown(registros: Record<string, string>[], campos: string[]):
   });
 }
 
-export default function ImportarCSVModal({ titulo, columnas, onImportar, onClose, onSuccess, camposHeredables, extraControls }: ImportarCSVModalProps) {
+export default function ImportarCSVModal({ titulo, columnas, onImportar, onClose, onSuccess, camposHeredables, extraControls, procesarFilas }: ImportarCSVModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<Record<string, any>[] | null>(null);
   const [fileName, setFileName] = useState("");
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ creados: number; errores: { fila: number; error: string }[] } | null>(null);
 
-  const procesarPreview = (registros: Record<string, string>[]) =>
-    camposHeredables?.length ? aplicarFillDown(registros, camposHeredables) : registros;
+  const procesarPreview = (registros: Record<string, string>[]) => {
+    const conFillDown = camposHeredables?.length ? aplicarFillDown(registros, camposHeredables) : registros;
+    return procesarFilas ? procesarFilas(conFillDown) : conFillDown;
+  };
 
   const handleFile = (file: File) => {
     setFileName(file.name);
     setResult(null);
+
+    if (/\.xlsx?$/i.test(file.name)) {
+      const reader = new FileReader();
+      reader.onload = (e) => setPreview(procesarPreview(parseXLSX(e.target?.result as ArrayBuffer)));
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       let text = e.target?.result as string;
@@ -69,7 +105,7 @@ export default function ImportarCSVModal({ titulo, columnas, onImportar, onClose
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith(".csv")) handleFile(file);
+    if (file && /\.(csv|xlsx?)$/i.test(file.name)) handleFile(file);
   };
 
   const handleImport = async () => {
@@ -154,13 +190,13 @@ export default function ImportarCSVModal({ titulo, columnas, onImportar, onClose
             >
               <Upload size={28} className="text-slate-300" />
               <div>
-                <p className="text-sm font-semibold text-slate-600">Arrastra tu archivo CSV aquí</p>
+                <p className="text-sm font-semibold text-slate-600">Arrastra tu archivo CSV o Excel aquí</p>
                 <p className="text-xs text-slate-400 mt-1">o haz clic para seleccionar</p>
               </div>
               <input
                 ref={fileRef}
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
