@@ -43,7 +43,7 @@ export default function Home() {
             className="rounded-lg bg-white px-3 py-1.5 shadow-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
+            transition={{ duration: 0.5 }}
           >
             <img
               src="/logo-secretaria-cultura.jpeg"
@@ -53,7 +53,9 @@ export default function Home() {
           </motion.div>
         </motion.div>
 
-        {/* Contenido centrado — stagger secuencial */}
+        {/* Contenido centrado — entrada simultanea (antes stagger secuencial de
+            1.3s+, delay por delay -- se sentia como carga por partes en vez de
+            una transicion, mismo hallazgo que en el resto del sistema) */}
         <div className="flex flex-1 flex-col items-center justify-center px-10 xl:px-14">
           <motion.img
             src="/joven-mexicana.png"
@@ -62,7 +64,7 @@ export default function Home() {
             style={{ mixBlendMode: "multiply" }}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           />
 
           <motion.img
@@ -72,14 +74,14 @@ export default function Home() {
             style={{ mixBlendMode: "multiply" }}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           />
 
           <motion.div
             className="mt-3 text-center"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.85, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
             <p className="text-micro font-semibold tracking-[0.15em] text-accent-500 uppercase">
               SIDCU
@@ -95,7 +97,7 @@ export default function Home() {
           className="h-1 w-full bg-primary-500 shrink-0"
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
-          transition={{ delay: 1.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           style={{ transformOrigin: "left" }}
         />
 
@@ -104,7 +106,7 @@ export default function Home() {
           className="px-10 py-3 xl:px-14"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.3, duration: 0.5 }}
+          transition={{ duration: 0.5 }}
         >
           <p className="text-center text-micro font-medium tracking-wide text-inst-gray">
             © 2026 Secretaría de Cultura · Plataforma Institucional
@@ -118,7 +120,7 @@ export default function Home() {
           <motion.div
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.7, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
             className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-modal sm:p-7"
           >
             <h2 className="text-subheading font-extrabold tracking-tight text-slate-900 sm:text-heading">
