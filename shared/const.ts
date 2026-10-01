@@ -11,6 +11,13 @@ export const TIPO_PROGRAMA_LABELS: Record<string, string> = {
   SDPC: "SDPC",
 };
 
+export const FACTOR_INCONFORMIDAD_LABELS: Record<string, string> = {
+  capacitacion: "Capacitación",
+  evaluacion_desempeno: "Evaluación del Desempeño",
+  antiguedad: "Antigüedad",
+  preparacion_academica: "Preparación Académica",
+};
+
 // SPC y SDPC: finalidad fija, igual para todos sus cursos -- se deriva sola,
 // no se captura. PAC: cada curso elige UNA de estas 4 (variable por curso,
 // no una sola finalidad para todo el tipo) -- ver FINALIDADES_PAC.
@@ -88,3 +95,6 @@ export const CMAO_CATALOGO: { cmao: string; ua: string }[] = [
   { cmao: "CMAO17", ua: "INSTITUTO NACIONAL DEL DERECHO DE AUTOR" },
   { cmao: "CMAO18", ua: "RADIO EDUCACIÓN" },
 ];
+
+export const MAX_PDF_BYTES = 10 * 1024 * 1024; // 10MB
+export const TIPO_PDF = "application/pdf";
