@@ -14,7 +14,17 @@ export const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] as const } },
 };
 
+// staggerChildren: 0 (2026-10-01) -- con 0.05s cada pagina anima 5+ secciones
+// (header, stats, graficas, tablas) en cascada secuencial de arriba a abajo,
+// se lee como "cargando por partes" en vez de una transicion cohesiva
+// (retroalimentacion directa del cliente tras ver el fix de fadeUp en vivo).
+// Con delay 0 los mismos hijos fadeUp siguen "realzando" pero casi al mismo
+// tiempo, un solo momento coordinado -- sin tocar DashboardLayout.tsx para
+// nada, a proposito: el intento anterior de resolver esto con un
+// AnimatePresence a nivel de layout competia contra el fadeUp de cada
+// pagina (doble capa de animacion, exit+enter sumando tiempo muerto) y no
+// mejoro nada en vivo -- este cambio es deliberadamente aislado.
 export const stagger = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.05 } },
+  show: { transition: { staggerChildren: 0 } },
 };
