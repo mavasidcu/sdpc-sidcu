@@ -1,6 +1,8 @@
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { FACTOR_INCONFORMIDAD_LABELS } from "@shared/const";
+import { formatearPuntaje } from "@shared/utils";
 
 const NIVEL_LABELS: Record<string, string> = {
   federal: "Federal",
@@ -72,7 +74,7 @@ const NIVEL_PROG_LABELS: Record<number, string> = { 0: "Nuevo ingreso", 1: "N1",
 // dos bases distintas para el mismo momento: en Mexico (UTC-6), ya entrada
 // la noche local UTC ya rodo al dia siguiente, y el archivo salia fechado
 // un dia adelante del texto "Generado:" que mostraba el dia local real.
-function fechaLocalISO(): string {
+export function fechaLocalISO(): string {
   const d = new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -398,6 +400,292 @@ export function exportarCursosPorInscritosPDF(items: CursoInscritosExport[], fil
       fillColor: [253, 242, 245],
     },
     margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`${filename}_${fechaLocalISO()}.pdf`);
+}
+
+interface InconformidadExport {
+  nombreCompleto: string;
+  curp: string;
+  factor: string;
+  mensaje: string;
+  archivoId: number | null;
+  enviadoAt: Date | string;
+}
+
+function prepararDatosInconformidades(items: InconformidadExport[]) {
+  return items.map((f) => ({
+    "Nombre Completo": sanitizeCell(f.nombreCompleto),
+    CURP: sanitizeCell(f.curp),
+    Factor: FACTOR_INCONFORMIDAD_LABELS[f.factor] ?? f.factor,
+    Mensaje: sanitizeCell(f.mensaje),
+    PDF: f.archivoId ? "Sí" : "No",
+    "Fecha de Envío": formatFechaHora(f.enviadoAt),
+  }));
+}
+
+export function exportarInconformidadesExcel(items: InconformidadExport[], filename = "inconformidades") {
+  const datos = prepararDatosInconformidades(items);
+  const ws = XLSX.utils.json_to_sheet(datos);
+  ws["!cols"] = [
+    { wch: 30 }, // Nombre
+    { wch: 20 }, // CURP
+    { wch: 25 }, // Factor
+    { wch: 60 }, // Mensaje
+    { wch: 6 },  // PDF
+    { wch: 18 }, // Fecha
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Inconformidades");
+  XLSX.writeFile(wb, `${filename}_${fechaLocalISO()}.xlsx`);
+}
+
+export function exportarInconformidadesPDF(items: InconformidadExport[], filename = "inconformidades") {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "letter" });
+
+  doc.setFontSize(16);
+  doc.setTextColor(97, 18, 50);
+  doc.text("Secretaría de Cultura", 14, 15);
+
+  doc.setFontSize(11);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Inconformidades", 14, 22);
+
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text(
+    `Generado: ${new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })} · ${items.length} registros`,
+    14, 28,
+  );
+
+  const headers = ["Nombre", "CURP", "Factor", "Mensaje", "PDF", "Fecha"];
+  const rows = items.map((f) => [
+    f.nombreCompleto,
+    f.curp,
+    FACTOR_INCONFORMIDAD_LABELS[f.factor] ?? f.factor,
+    f.mensaje,
+    f.archivoId ? "Sí" : "No",
+    formatFechaHora(f.enviadoAt),
+  ]);
+
+  autoTable(doc, {
+    head: [headers],
+    body: rows,
+    startY: 33,
+    columnStyles: { 3: { cellWidth: 90 } },
+    styles: { fontSize: 7, cellPadding: 1.5, lineColor: [226, 232, 240], lineWidth: 0.1 },
+    headStyles: {
+      fillColor: [97, 18, 50],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 7.5,
+    },
+    alternateRowStyles: {
+      fillColor: [253, 242, 245],
+    },
+  });
+
+  doc.save(`${filename}_${fechaLocalISO()}.pdf`);
+}
+
+interface ResultadoPromocionExport {
+  trabajadorNombre: string;
+  trabajadorCurp: string;
+  autoevaluacion: number | "pendiente";
+  jefe: number | "pendiente";
+  companero1: number | "pendiente";
+  companero2: number | "pendiente";
+  total: number;
+  completo: boolean;
+}
+
+// Decimales por componente segun su precision real de storage (ver
+// drizzle/schema.ts): Autoevaluacion es decimal(4,1) (0.5pt/acierto),
+// Jefe es entero (1pt/acierto), Compañero es decimal(5,3) (fraccion
+// 6/14 no-terminante, ej. 2.571) -- mostrar los 4 siempre a 3 decimales
+// sugiere falsa precision en Autoevaluacion/Jefe, que nunca la tienen.
+function fmtResultado(v: number | "pendiente", decimales: number): string {
+  return v === "pendiente" ? "Pendiente" : v.toFixed(decimales);
+}
+
+function prepararDatosResultadosPromocion(items: ResultadoPromocionExport[]) {
+  return items.map((r) => ({
+    "Nombre Completo": sanitizeCell(r.trabajadorNombre),
+    CURP: sanitizeCell(r.trabajadorCurp),
+    "Autoevaluación (14)": fmtResultado(r.autoevaluacion, 1),
+    "Jefe (14)": fmtResultado(r.jefe, 0),
+    "Compañero 1 (6)": fmtResultado(r.companero1, 3),
+    "Compañero 2 (6)": fmtResultado(r.companero2, 3),
+    "Total (40)": formatearPuntaje(r.total),
+    Estado: r.completo ? "Completo" : "Pendiente",
+  }));
+}
+
+export function exportarResultadosPromocionExcel(items: ResultadoPromocionExport[], filename = "resultados_promocion") {
+  const datos = prepararDatosResultadosPromocion(items);
+  const ws = XLSX.utils.json_to_sheet(datos);
+  ws["!cols"] = [
+    { wch: 30 }, // Nombre
+    { wch: 20 }, // CURP
+    { wch: 18 }, // Autoevaluación
+    { wch: 12 }, // Jefe
+    { wch: 15 }, // Compañero 1
+    { wch: 15 }, // Compañero 2
+    { wch: 12 }, // Total
+    { wch: 12 }, // Estado
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Resultados Promoción");
+  XLSX.writeFile(wb, `${filename}_${fechaLocalISO()}.xlsx`);
+}
+
+export function exportarResultadosPromocionPDF(items: ResultadoPromocionExport[], filename = "resultados_promocion") {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "letter" });
+
+  doc.setFontSize(16);
+  doc.setTextColor(97, 18, 50);
+  doc.text("Secretaría de Cultura", 14, 15);
+
+  doc.setFontSize(11);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Resultados de Promoción", 14, 22);
+
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text(
+    `Generado: ${new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })} · ${items.length} registros`,
+    14, 28,
+  );
+
+  const headers = ["Nombre", "CURP", "Autoeval. (14)", "Jefe (14)", "Comp. 1 (6)", "Comp. 2 (6)", "Total (40)", "Estado"];
+  const rows = items.map((r) => [
+    r.trabajadorNombre,
+    r.trabajadorCurp,
+    fmtResultado(r.autoevaluacion, 1),
+    fmtResultado(r.jefe, 0),
+    fmtResultado(r.companero1, 3),
+    fmtResultado(r.companero2, 3),
+    formatearPuntaje(r.total),
+    r.completo ? "Completo" : "Pendiente",
+  ]);
+
+  autoTable(doc, {
+    head: [headers],
+    body: rows,
+    startY: 33,
+    styles: { fontSize: 7, cellPadding: 1.5, lineColor: [226, 232, 240], lineWidth: 0.1 },
+    headStyles: {
+      fillColor: [97, 18, 50],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 7.5,
+    },
+    alternateRowStyles: {
+      fillColor: [253, 242, 245],
+    },
+  });
+
+  doc.save(`${filename}_${fechaLocalISO()}.pdf`);
+}
+
+interface InscripcionPromocionExport {
+  trabajadorNombre: string;
+  trabajadorCurp: string;
+  jefeNombre: string | null;
+  jefePuntaje: number | null;
+  companero1Nombre: string | null;
+  companero1Puntaje: number | null;
+  companero2Nombre: string | null;
+  companero2Puntaje: number | null;
+  enviadoAt: Date | string;
+}
+
+// null (no enviado) -> "Pendiente"; con puntaje real -> formatearPuntaje
+// (quita ceros de cola, ej. 5.000 -> "5"), mismo criterio que Resultados
+// de Promoción -- un evaluador que no ha calificado nunca se lee como "0".
+function fmtCalificacion(puntaje: number | null): string {
+  return puntaje === null ? "Pendiente" : formatearPuntaje(puntaje);
+}
+
+function prepararDatosInscripcionesPromocion(items: InscripcionPromocionExport[]) {
+  return items.map((i) => ({
+    Servidor: sanitizeCell(i.trabajadorNombre),
+    CURP: sanitizeCell(i.trabajadorCurp),
+    Jefe: sanitizeCell(i.jefeNombre ?? "— cuenta no encontrada"),
+    "Jefe Evaluó (0-14)": fmtCalificacion(i.jefePuntaje),
+    "Compañero 1": sanitizeCell(i.companero1Nombre ?? "— cuenta no encontrada"),
+    "Compañero 1 Evaluó (0-6)": fmtCalificacion(i.companero1Puntaje),
+    "Compañero 2": sanitizeCell(i.companero2Nombre ?? "— cuenta no encontrada"),
+    "Compañero 2 Evaluó (0-6)": fmtCalificacion(i.companero2Puntaje),
+    "Fecha de Inscripción": formatFechaHora(i.enviadoAt),
+  }));
+}
+
+export function exportarInscripcionesPromocionExcel(items: InscripcionPromocionExport[], filename = "inscripciones_promocion") {
+  const datos = prepararDatosInscripcionesPromocion(items);
+  const ws = XLSX.utils.json_to_sheet(datos);
+  ws["!cols"] = [
+    { wch: 28 }, // Servidor
+    { wch: 20 }, // CURP
+    { wch: 26 }, // Jefe
+    { wch: 16 }, // Jefe Evaluó (0-14)
+    { wch: 26 }, // Compañero 1
+    { wch: 18 }, // Compañero 1 Evaluó (0-6)
+    { wch: 26 }, // Compañero 2
+    { wch: 18 }, // Compañero 2 Evaluó (0-6)
+    { wch: 18 }, // Fecha
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Inscripciones Promoción");
+  XLSX.writeFile(wb, `${filename}_${fechaLocalISO()}.xlsx`);
+}
+
+export function exportarInscripcionesPromocionPDF(items: InscripcionPromocionExport[], filename = "inscripciones_promocion") {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "letter" });
+
+  doc.setFontSize(16);
+  doc.setTextColor(97, 18, 50);
+  doc.text("Secretaría de Cultura", 14, 15);
+
+  doc.setFontSize(11);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Inscripciones a Promoción", 14, 22);
+
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text(
+    `Generado: ${new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })} · ${items.length} registros`,
+    14, 28,
+  );
+
+  const headers = ["Servidor", "CURP", "Jefe", "Evaluó (0-14)", "Compañero 1", "Evaluó (0-6)", "Compañero 2", "Evaluó (0-6)", "Fecha"];
+  const rows = items.map((i) => [
+    i.trabajadorNombre,
+    i.trabajadorCurp,
+    i.jefeNombre ?? "— cuenta no encontrada",
+    fmtCalificacion(i.jefePuntaje),
+    i.companero1Nombre ?? "— cuenta no encontrada",
+    fmtCalificacion(i.companero1Puntaje),
+    i.companero2Nombre ?? "— cuenta no encontrada",
+    fmtCalificacion(i.companero2Puntaje),
+    formatFechaHora(i.enviadoAt),
+  ]);
+
+  autoTable(doc, {
+    head: [headers],
+    body: rows,
+    startY: 33,
+    styles: { fontSize: 7, cellPadding: 1.5, lineColor: [226, 232, 240], lineWidth: 0.1 },
+    headStyles: {
+      fillColor: [97, 18, 50],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 7.5,
+    },
+    alternateRowStyles: {
+      fillColor: [253, 242, 245],
+    },
   });
 
   doc.save(`${filename}_${fechaLocalISO()}.pdf`);
