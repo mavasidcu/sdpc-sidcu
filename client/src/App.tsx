@@ -1,37 +1,53 @@
-import { Component, type ReactNode, useEffect } from "react";
+import { Component, lazy, Suspense, type ReactNode, useEffect } from "react";
 import { Route, Switch, Redirect, useLocation } from "wouter";
 import { Toaster } from "sonner";
 import { useAuthState } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import Home from "@/pages/Home";
 import RecuperarContrasena from "@/pages/RecuperarContrasena";
 import RestablecerContrasena from "@/pages/RestablecerContrasena";
 import NotFound from "@/pages/NotFound";
-import Servidores from "@/pages/Servidores";
-import Dashboard from "@/pages/Dashboard";
-import Auditoria from "@/pages/Auditoria";
-import Reportes from "@/pages/Reportes";
-import Importacion from "@/pages/Importacion";
-import Usuarios from "@/pages/Usuarios";
-import Onboarding from "@/pages/Onboarding";
-import Portal from "@/pages/Portal";
-import CatalogoCursos from "@/pages/CatalogoCursos";
-import MisSolicitudes from "@/pages/MisSolicitudes";
-import GestionCursos from "@/pages/GestionCursos";
-import Instituciones from "@/pages/Instituciones";
-import GestionSolicitudes from "@/pages/GestionSolicitudes";
-import Inconformidad from "@/pages/Inconformidad";
-import Promocion from "@/pages/Promocion";
-import Autoevaluacion from "@/pages/Autoevaluacion";
-import EvaluacionesPendientes from "@/pages/EvaluacionesPendientes";
-import Evaluacion from "@/pages/Evaluacion";
-import GestionInconformidades from "@/pages/GestionInconformidades";
-import GestionPromocion from "@/pages/GestionPromocion";
-import PromocionResultados from "@/pages/PromocionResultados";
-import GestionAutoevaluacion from "@/pages/GestionAutoevaluacion";
-import GestionEvaluadores from "@/pages/GestionEvaluadores";
-import CentroModulos from "@/pages/CentroModulos";
+
+// Carga perezosa por ruta -- antes TODAS las paginas (25+) iban en un solo
+// bundle de 2.1MB (631KB gzip) que cada visitante descargaba completo antes
+// de ver nada, sin importar que pagina iba a usar. En localhost (filesystem)
+// eso es instantaneo y nunca se nota; en produccion (red real) son ~2s de
+// pantalla en blanco -- la diferencia real detras de "en local se ve
+// perfecto pero en produccion se ve mal" (2026-10-01). Con lazy() cada
+// pagina es su propio chunk, descargado solo al visitarla.
+const Home = lazy(() => import("@/pages/Home"));
+const Servidores = lazy(() => import("@/pages/Servidores"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Auditoria = lazy(() => import("@/pages/Auditoria"));
+const Reportes = lazy(() => import("@/pages/Reportes"));
+const Importacion = lazy(() => import("@/pages/Importacion"));
+const Usuarios = lazy(() => import("@/pages/Usuarios"));
+const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const Portal = lazy(() => import("@/pages/Portal"));
+const CatalogoCursos = lazy(() => import("@/pages/CatalogoCursos"));
+const MisSolicitudes = lazy(() => import("@/pages/MisSolicitudes"));
+const GestionCursos = lazy(() => import("@/pages/GestionCursos"));
+const Instituciones = lazy(() => import("@/pages/Instituciones"));
+const GestionSolicitudes = lazy(() => import("@/pages/GestionSolicitudes"));
+const Inconformidad = lazy(() => import("@/pages/Inconformidad"));
+const Promocion = lazy(() => import("@/pages/Promocion"));
+const Autoevaluacion = lazy(() => import("@/pages/Autoevaluacion"));
+const EvaluacionesPendientes = lazy(() => import("@/pages/EvaluacionesPendientes"));
+const Evaluacion = lazy(() => import("@/pages/Evaluacion"));
+const GestionInconformidades = lazy(() => import("@/pages/GestionInconformidades"));
+const GestionPromocion = lazy(() => import("@/pages/GestionPromocion"));
+const PromocionResultados = lazy(() => import("@/pages/PromocionResultados"));
+const GestionAutoevaluacion = lazy(() => import("@/pages/GestionAutoevaluacion"));
+const GestionEvaluadores = lazy(() => import("@/pages/GestionEvaluadores"));
+const CentroModulos = lazy(() => import("@/pages/CentroModulos"));
+
+function RouteFallback() {
+  return (
+    <div className="flex h-64 items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+    </div>
+  );
+}
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -97,7 +113,9 @@ function ProtectedRoute({
     <Route path={routePath}>
       <DashboardLayout>
         <PageErrorBoundary>
-          <Component />
+          <Suspense fallback={<RouteFallback />}>
+            <Component />
+          </Suspense>
         </PageErrorBoundary>
       </DashboardLayout>
     </Route>
@@ -117,7 +135,11 @@ function AuthRoute({ isAuthenticated, isLoading }: { isAuthenticated: boolean; i
     return <Redirect to="/dashboard" />;
   }
 
-  return <Home />;
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <Home />
+    </Suspense>
+  );
 }
 
 export default function App() {
