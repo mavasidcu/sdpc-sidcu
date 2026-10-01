@@ -22,6 +22,8 @@ import {
   GraduationCap,
   Building,
   Inbox,
+  FileWarning,
+  ToggleLeft,
 } from "lucide-react";
 
 interface NavItem {
@@ -36,15 +38,18 @@ const navItems: NavItem[] = [
   { label: "Portal", href: "/portal", icon: Home, roles: ["user"] },
   { label: "Catálogo Cursos", href: "/portal/cursos", icon: BookOpen, roles: ["user"] },
   { label: "Mis Solicitudes", href: "/portal/solicitudes", icon: ClipboardCheck, roles: ["user"] },
+  { label: "Inconformidad", href: "/portal/inconformidad", icon: FileWarning, roles: ["user"] },
   { label: "Servidores", href: "/servidores", icon: Users, roles: ["admin", "capturista"] },
   { label: "Importar CSV", href: "/importar", icon: FileUp, roles: ["admin", "capturista"] },
   // { label: "Archivos", href: "/archivos", icon: Upload, roles: ["admin", "capturista"] }, // En construcción
   { label: "Cursos", href: "/cursos", icon: GraduationCap, roles: ["admin"] },
   { label: "Instituciones", href: "/instituciones", icon: Building, roles: ["admin"] },
   { label: "Solicitudes", href: "/solicitudes", icon: Inbox, roles: ["admin"] },
+  { label: "Inconformidades", href: "/inconformidades", icon: FileWarning, roles: ["admin"] },
   { label: "Usuarios", href: "/usuarios", icon: UserCog, roles: ["admin"] },
   { label: "Auditoría", href: "/auditoria", icon: ClipboardList, roles: ["admin"] },
   { label: "Reportes", href: "/reportes", icon: FileText, roles: ["admin", "consultor"] },
+  { label: "Centro de Módulos", href: "/modulos", icon: ToggleLeft, roles: ["admin"] },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -62,10 +67,31 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const [showIdleWarn, setShowIdleWarn] = useState(false);
 
   const role = user?.role ?? "user";
-  const visibleItems = navItems.filter((item) => item.roles.includes(role));
 
   const { data: perfil, isLoading: perfilLoading } = trpc.perfil.obtener.useQuery(undefined, {
     enabled: role === "user",
+  });
+
+  // No es el candado real (eso ya lo hacen los procedures server-side, ver
+  // exigirModuloHabilitado en el router) -- solo evita mostrar un link a
+  // una seccion que ahora mismo va a rechazar todo. `!== false` para no
+  // esconder/mostrar el link con un parpadeo mientras la query carga.
+  const { data: inconformidadHabilitada } = trpc.inconformidad.moduloHabilitado.useQuery(undefined, {
+    enabled: role === "user",
+  });
+  // Excepcion: un caso YA enviado se sigue viendo aunque el modulo este en
+  // pausa (Inconformidad.tsx tiene el mismo carve-out -- "pausa nunca
+  // esconde trabajo ya hecho"). Sin esto, el trabajador pierde el link del
+  // sidebar a su propio acuse aunque la pagina, si entra directo, se lo
+  // siga mostrando completo -- inconsistencia real entre nav y contenido.
+  const { data: miInconformidad } = trpc.inconformidad.miInconformidad.useQuery(undefined, {
+    enabled: role === "user",
+  });
+  const tieneCasoEnviado = miInconformidad?.estado === "enviado";
+  const visibleItems = navItems.filter((item) => {
+    if (!item.roles.includes(role)) return false;
+    if (item.href === "/portal/inconformidad") return inconformidadHabilitada !== false || tieneCasoEnviado;
+    return true;
   });
 
   useEffect(() => {

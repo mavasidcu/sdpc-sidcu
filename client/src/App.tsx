@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import { Route, Switch, Redirect, useLocation } from "wouter";
+import { Toaster } from "sonner";
 import { useAuthState } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -20,6 +21,9 @@ import MisSolicitudes from "@/pages/MisSolicitudes";
 import GestionCursos from "@/pages/GestionCursos";
 import Instituciones from "@/pages/Instituciones";
 import GestionSolicitudes from "@/pages/GestionSolicitudes";
+import Inconformidad from "@/pages/Inconformidad";
+import GestionInconformidades from "@/pages/GestionInconformidades";
+import CentroModulos from "@/pages/CentroModulos";
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -184,6 +188,18 @@ export default function App() {
           isLoading={isLoading}
         />
         <ProtectedRoute
+          path="/inconformidades"
+          component={GestionInconformidades}
+          isAuthenticated={isAuthenticated}
+          isLoading={isLoading}
+        />
+        <ProtectedRoute
+          path="/modulos"
+          component={CentroModulos}
+          isAuthenticated={isAuthenticated}
+          isLoading={isLoading}
+        />
+        <ProtectedRoute
           path="/portal/cursos"
           component={CatalogoCursos}
           isAuthenticated={isAuthenticated}
@@ -192,6 +208,12 @@ export default function App() {
         <ProtectedRoute
           path="/portal/solicitudes"
           component={MisSolicitudes}
+          isAuthenticated={isAuthenticated}
+          isLoading={isLoading}
+        />
+        <ProtectedRoute
+          path="/portal/inconformidad"
+          component={Inconformidad}
           isAuthenticated={isAuthenticated}
           isLoading={isLoading}
         />
@@ -205,6 +227,7 @@ export default function App() {
         <Route path="/restablecer-contrasena/:token" component={RestablecerContrasena} />
         <Route component={NotFound} />
       </Switch>
+      <Toaster position="bottom-right" richColors />
     </ThemeProvider>
   );
 }
