@@ -230,13 +230,13 @@ export default function GestionInconformidades() {
             </div>
           ))
         ) : (casos ?? []).length === 0 ? (
-          <motion.div variants={fadeUp} className="rounded-2xl bg-white p-12 text-center shadow-card-rest border border-gray-100">
+          <div className="rounded-2xl bg-white p-12 text-center shadow-card-rest border border-gray-100">
             <FileText className="mx-auto h-12 w-12 text-gray-300" />
             <p className="mt-3 font-medium text-gray-600">No hay inconformidades enviadas</p>
-          </motion.div>
+          </div>
         ) : (
           casos!.map((caso) => (
-            <motion.div key={caso.id} variants={fadeUp} className="rounded-2xl bg-white p-5 shadow-card-rest border border-gray-100">
+            <div key={caso.id} className="rounded-2xl bg-white p-5 shadow-card-rest border border-gray-100">
               <button
                 type="button"
                 onClick={() => setVerDetalle(verDetalle === caso.id ? null : caso.id)}
@@ -274,7 +274,7 @@ export default function GestionInconformidades() {
                   ))}
                 </div>
               )}
-            </motion.div>
+            </div>
           ))
         )}
       </motion.div>

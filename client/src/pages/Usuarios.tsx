@@ -198,26 +198,23 @@ export default function Usuarios() {
           ))}
         </div>
       ) : !usuarios?.length ? (
-        <motion.div variants={fadeUp} className="flex flex-col items-center py-16 text-center">
+        <div className="flex flex-col items-center py-16 text-center">
           <div className="rounded-2xl bg-slate-50 p-5">
             <UserCog size={28} className="text-slate-300" />
           </div>
           <p className="mt-4 text-sm font-medium text-slate-400">
             {search || estatusFilter ? "Sin resultados para ese filtro" : "Sin usuarios registrados"}
           </p>
-        </motion.div>
+        </div>
       ) : (
-        <motion.div variants={fadeUp} className="space-y-2">
+        <div className="space-y-2">
           {(usuarios as any[]).map((usr) => {
             const roleConfig = ROLE_CONFIG[usr.role] ?? ROLE_CONFIG.user;
             const isSelf = usr.id === currentUser?.id;
 
             return (
-              <motion.div
+              <div
                 key={usr.id}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
                 className={`group relative flex items-center gap-4 rounded-2xl border bg-white p-4 shadow-card-rest transition-all hover:shadow-card-hover ${
                   usr.isActive ? "border-slate-200/60" : "border-rose-200/60 bg-rose-50/30"
                 }`}
@@ -329,10 +326,10 @@ export default function Usuarios() {
                 >
                   {usr.isActive ? <UserCheck size={16} /> : <UserX size={16} />}
                 </button>
-              </motion.div>
+              </div>
             );
           })}
-        </motion.div>
+        </div>
       )}
 
       {/* Paginación */}

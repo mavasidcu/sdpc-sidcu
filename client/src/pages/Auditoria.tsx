@@ -148,19 +148,16 @@ export default function Auditoria() {
           ))}
         </div>
       ) : filteredItems.length === 0 ? (
-        <motion.div
-          variants={fadeUp}
-          className="flex flex-col items-center py-16 text-center"
-        >
+        <div className="flex flex-col items-center py-16 text-center">
           <div className="rounded-2xl bg-slate-50 p-5">
             <ClipboardList size={28} className="text-slate-300" />
           </div>
           <p className="mt-4 text-sm font-medium text-slate-400">
             Sin registros de auditoría
           </p>
-        </motion.div>
+        </div>
       ) : (
-        <motion.div variants={fadeUp} className="space-y-2">
+        <div className="space-y-2">
           {filteredItems.map((item: any) => {
             const config = ACCION_CONFIG[item.accion] ?? {
               icon: FileText,
@@ -171,11 +168,8 @@ export default function Auditoria() {
             const Icon = config.icon;
 
             return (
-              <motion.div
+              <div
                 key={item.id}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
                 className="group relative flex gap-4 rounded-2xl border border-slate-200/60 bg-white p-4 shadow-card-rest transition-all hover:shadow-card-hover hover:border-slate-200"
               >
                 {/* Icon */}
@@ -222,10 +216,10 @@ export default function Auditoria() {
                     </span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
-        </motion.div>
+        </div>
       )}
 
       {/* Pagination */}

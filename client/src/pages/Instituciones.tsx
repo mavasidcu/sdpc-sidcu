@@ -211,18 +211,17 @@ export default function Instituciones() {
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : !displayInstituciones?.length ? (
-        <motion.div variants={fadeUp} className="flex flex-col items-center py-16 text-center">
+        <div className="flex flex-col items-center py-16 text-center">
           <div className="rounded-2xl bg-slate-50 p-5">
             <Building2 size={28} className="text-slate-300" />
           </div>
           <p className="mt-4 text-sm font-medium text-slate-400">No hay instituciones registradas</p>
-        </motion.div>
+        </div>
       ) : (
-        <motion.div variants={stagger} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {displayInstituciones.map((inst: any) => (
-            <motion.div
+            <div
               key={inst.id}
-              variants={fadeUp}
               className="group rounded-2xl border border-slate-200/60 bg-white p-5 shadow-card-rest transition-all hover:shadow-card-hover hover:border-slate-200"
             >
               <div className="flex items-start justify-between gap-2">
@@ -299,9 +298,9 @@ export default function Instituciones() {
                   {inst.activo ? "Activa" : "Inactiva"}
                 </span>
               </div>
-            </motion.div>
+            </div>
           ))}
-        </motion.div>
+        </div>
       )}
 
       {/* Create/Edit Modal */}
