@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { stagger, fadeUp } from "@/lib/animations";
 import { trpc } from "@/lib/trpc";
 import {
   ClipboardCheck,
@@ -11,7 +12,9 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
-  Download,
+  Search,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
 import ImportarCSVModal from "@/components/ImportarCSVModal";
 import {
@@ -20,15 +23,6 @@ import {
   exportarCursosPorInscritosExcel,
   exportarCursosPorInscritosPDF,
 } from "@/lib/exportar";
-
-const stagger = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08 } },
-};
-const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] } },
-};
 
 // "pendiente"/"rechazada" ya no ocurren en la practica -- la inscripcion
 // es directa (crearSolicitudConAsignacion siempre inserta "aprobada"), y
@@ -62,14 +56,14 @@ function formatFecha(date: string | Date) {
 export default function GestionSolicitudes() {
   const utils = trpc.useUtils();
   const [estadoFilter, setEstadoFilter] = useState<Estado>("");
-  const [userFilter, setUserFilter] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState<ModalState>({ type: "closed" });
   const [calificacion, setCalificacion] = useState("");
   const [showImportCalificaciones, setShowImportCalificaciones] = useState(false);
 
   const { data, isLoading, isFetching } = trpc.solicitudes.listar.useQuery(
-    { estado: estadoFilter || undefined, page },
+    { estado: estadoFilter || undefined, search: search || undefined, page },
     { placeholderData: (prev) => prev },
   );
   const solicitudes = data?.items;
@@ -95,6 +89,7 @@ export default function GestionSolicitudes() {
   const handleExportSolicitudes = async (tipo: "excel" | "pdf") => {
     const { items, total, truncado } = await utils.solicitudes.exportarTodas.fetch({
       estado: estadoFilter || undefined,
+      search: search || undefined,
     });
     if (truncado) {
       alert(
@@ -193,17 +188,17 @@ export default function GestionSolicitudes() {
           <button
             onClick={() => handleExport("excel")}
             disabled={exportando !== null}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
           >
-            <Download size={16} />
+            <FileSpreadsheet size={16} />
             {exportando === "excel" ? "Exportando..." : "Excel"}
           </button>
           <button
             onClick={() => handleExport("pdf")}
             disabled={exportando !== null}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-50"
           >
-            <Download size={16} />
+            <FileText size={16} />
             {exportando === "pdf" ? "Exportando..." : "PDF"}
           </button>
           <button
@@ -315,16 +310,16 @@ export default function GestionSolicitudes() {
             </button>
           );
         })}
-        <select
-          value={userFilter}
-          onChange={(e) => setUserFilter(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600"
-        >
-          <option value="">Todos los usuarios</option>
-          {[...new Set((solicitudes ?? []).map((s: any) => s.users?.nombre).filter(Boolean))].sort().map((nombre: string) => (
-            <option key={nombre} value={nombre}>{nombre}</option>
-          ))}
-        </select>
+        <div className="relative min-w-0 flex-1 sm:max-w-xs">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Buscar por nombre o CURP..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs font-medium text-slate-600 outline-none transition-all focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
+          />
+        </div>
       </motion.div>
 
       {/* Solicitudes list */}
@@ -355,7 +350,7 @@ export default function GestionSolicitudes() {
         </motion.div>
       ) : (
         <motion.div variants={stagger} className="space-y-3">
-          {solicitudes.filter((item: any) => !userFilter || item.users?.nombre === userFilter).map((item: any, index: number) => {
+          {solicitudes.map((item: any, index: number) => {
             const solicitud = item.solicitudes_curso ?? item;
             const curso = item.cursos ?? {};
             const usuario = item.users ?? {};
