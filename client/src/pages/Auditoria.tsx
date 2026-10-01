@@ -224,10 +224,7 @@ export default function Auditoria() {
 
       {/* Pagination */}
       {data && data.totalPages > 1 && (
-        <motion.div
-          variants={fadeUp}
-          className="flex items-center justify-between rounded-2xl border border-slate-200/60 bg-white px-4 py-3 shadow-card-rest"
-        >
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200/60 bg-white px-4 py-3 shadow-card-rest">
           <p className="text-xs text-slate-400">
             Página {data.page} de {data.totalPages} · {data.total} registros
           </p>
@@ -274,7 +271,7 @@ export default function Auditoria() {
               <ChevronRight size={16} />
             </button>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Detail modal */}

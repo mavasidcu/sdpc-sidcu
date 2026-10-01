@@ -331,7 +331,7 @@ export default function GestionCursos() {
 
       {/* Block selector */}
       {grupos.length > 1 && (
-        <motion.div variants={fadeUp} className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           {grupos.map((grupo) => (
             <button
               key={grupo.key}
@@ -348,7 +348,7 @@ export default function GestionCursos() {
               </span>
             </button>
           ))}
-        </motion.div>
+        </div>
       )}
 
       {/* Course list */}
@@ -369,11 +369,10 @@ export default function GestionCursos() {
         </motion.div>
       ) : (
         viewMode === "grid" ? (
-          <motion.div key={bloqueActivo ?? "sin-bloque"} variants={stagger} initial="hidden" animate="show" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div key={bloqueActivo ?? "sin-bloque"} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {cursosDelBloque.map((curso: any) => (
-              <motion.div
+              <div
                 key={curso.id}
-                variants={fadeUp}
                 className="group rounded-2xl border border-slate-200/60 bg-white p-5 shadow-card-rest transition-all hover:shadow-card-hover hover:border-slate-200"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -427,9 +426,9 @@ export default function GestionCursos() {
                     </button>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-slate-200/60 bg-white shadow-card-rest">
             <table className="w-full text-sm">
