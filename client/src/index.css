@@ -45,6 +45,11 @@
   /* Fuente principal — Noto Sans (tipografía institucional Gobierno de México)
      Cambiar en client/index.html si se modifica */
   --font-sans: 'Noto Sans', system-ui, -apple-system, sans-serif;
+  /* Noto Serif -- cargada en client/index.html pero sin registrar en Tailwind
+     hasta ahora (Autoevaluacion.tsx, wizard de preguntas). Uso deliberado y
+     acotado: da registro "formal/instrumento de evaluación" al texto de la
+     pregunta, nunca reemplaza --font-sans en el resto del sistema. */
+  --font-serif: 'Noto Serif', 'Noto Sans', serif;
 
   /* Escala tipográfica — tamaños reutilizables
      Usar con text-[--text-xxx] o directamente las clases de Tailwind */
