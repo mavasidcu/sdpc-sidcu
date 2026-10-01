@@ -113,7 +113,7 @@ export async function marcarTokenComoUsado(id: number) {
 
 // ─── Usuarios (Admin) ────────────────────────────────────────────────
 
-export async function listarUsuarios(search?: string, page = 1, limit = 20) {
+export async function listarUsuarios(search?: string, page = 1, limit = 20, estatus?: "activo" | "inactivo") {
   const d = await getDb();
   const conditions = [];
 
@@ -127,7 +127,14 @@ export async function listarUsuarios(search?: string, page = 1, limit = 20) {
     );
   }
 
+  // totalActivos/totalInactivos deben quedar fuera de este filtro -- son los
+  // contadores que se muestran en los tabs "Activos"/"Inactivos" (ver mas abajo),
+  // si el estatus tambien entrara aqui uno de los dos conteos siempre daria 0
+  // (isActive=true AND isActive=false nunca es cierto).
+  const itemConditions = estatus ? [...conditions, eq(schema.users.isActive, estatus === "activo")] : conditions;
+
   const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereItems = itemConditions.length > 0 ? and(...itemConditions) : undefined;
   const offset = (page - 1) * limit;
 
   // No seleccionar passwordHash aquí — el listado se manda al frontend en cada
@@ -149,11 +156,11 @@ export async function listarUsuarios(search?: string, page = 1, limit = 20) {
         updatedAt: schema.users.updatedAt,
       })
       .from(schema.users)
-      .where(where)
+      .where(whereItems)
       .orderBy(desc(schema.users.createdAt))
       .limit(limit)
       .offset(offset),
-    d.select({ count: sql<number>`count(*)` }).from(schema.users).where(where),
+    d.select({ count: sql<number>`count(*)` }).from(schema.users).where(whereItems),
     d.select({ count: sql<number>`count(*)` }).from(schema.users).where(and(...conditions, eq(schema.users.isActive, true))),
     d.select({ count: sql<number>`count(*)` }).from(schema.users).where(and(...conditions, eq(schema.users.isActive, false))),
   ]);
@@ -865,6 +872,58 @@ export async function listarTodasSolicitudes(filtros?: { estado?: string; page?:
     limit,
     totalPages: Math.ceil((countResult[0]?.count ?? 0) / limit),
   };
+}
+
+export async function exportarTodasSolicitudes(filtros?: { estado?: string }) {
+  const d = await getDb();
+  const conditions = [];
+  if (filtros?.estado) {
+    conditions.push(eq(schema.solicitudesCurso.estado, filtros.estado as any));
+  }
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const limite = 10000;
+
+  // No usar select() plano aquí — el join trae users.passwordHash al JSON enviado al navegador.
+  const [items, countResult] = await Promise.all([
+    d
+      .select({
+        solicitudes_curso: schema.solicitudesCurso,
+        cursos: schema.cursos,
+        instituciones: { nombre: schema.instituciones.nombre },
+        users: {
+          nombre: schema.users.nombre,
+          curp: schema.users.curp,
+          email: schema.users.email,
+        },
+      })
+      .from(schema.solicitudesCurso)
+      .innerJoin(schema.cursos, eq(schema.solicitudesCurso.cursoId, schema.cursos.id))
+      .innerJoin(schema.users, eq(schema.solicitudesCurso.userId, schema.users.id))
+      .leftJoin(schema.cursosInstituciones, eq(schema.solicitudesCurso.cursoInstitucionId, schema.cursosInstituciones.id))
+      .leftJoin(schema.instituciones, eq(schema.cursosInstituciones.institucionId, schema.instituciones.id))
+      .where(where)
+      .orderBy(desc(schema.solicitudesCurso.createdAt))
+      .limit(limite),
+    d.select({ count: sql<number>`count(*)` }).from(schema.solicitudesCurso).where(where),
+  ]);
+
+  return { items, total: countResult[0]?.count ?? 0, truncado: (countResult[0]?.count ?? 0) > limite };
+}
+
+export async function contarInscritosPorCurso() {
+  const d = await getDb();
+  return d
+    .select({
+      cursoId: schema.cursos.id,
+      nombre: schema.cursos.nombre,
+      bloque: schema.cursos.bloque,
+      total: sql<number>`count(${schema.solicitudesCurso.id})`,
+    })
+    .from(schema.solicitudesCurso)
+    .innerJoin(schema.cursos, eq(schema.solicitudesCurso.cursoId, schema.cursos.id))
+    .where(inArray(schema.solicitudesCurso.estado, ["aprobada", "completada"]))
+    .groupBy(schema.cursos.id, schema.cursos.nombre, schema.cursos.bloque)
+    .orderBy(desc(sql`count(${schema.solicitudesCurso.id})`));
 }
 
 export async function obtenerSolicitud(id: number) {

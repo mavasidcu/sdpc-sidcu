@@ -69,12 +69,13 @@ export const usuariosRouter = router({
     .input(
       z.object({
         search: z.string().optional(),
+        estatus: z.enum(["activo", "inactivo"]).optional(),
         page: z.number().int().positive().default(1),
         limit: z.number().int().positive().max(100).default(20),
       }),
     )
     .query(async ({ input }) => {
-      return listarUsuarios(input.search, input.page, input.limit);
+      return listarUsuarios(input.search, input.page, input.limit, input.estatus);
     }),
 
   cambiarRol: adminProcedure

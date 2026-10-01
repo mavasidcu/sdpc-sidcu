@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import {
@@ -54,10 +54,15 @@ export default function Instituciones() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<{ type: "single"; id: number; nombre: string } | { type: "bulk" } | null>(null);
 
-  const { data: instituciones, isLoading } = trpc.instituciones.listar.useQuery(
+  const { data: instituciones, isFetching } = trpc.instituciones.listar.useQuery(
     { soloActivas: false },
     { placeholderData: (prev) => prev },
   );
+
+  // Ref to keep last known data — previene que la lista se vea vacia durante refetch
+  const institucionesRef = useRef<typeof instituciones>(undefined);
+  if (instituciones !== undefined) institucionesRef.current = instituciones;
+  const displayInstituciones = institucionesRef.current;
 
   const crearMut = trpc.instituciones.crear.useMutation({
     onSuccess: () => {
@@ -97,11 +102,11 @@ export default function Instituciones() {
   };
 
   const selectAll = () => {
-    if (!instituciones) return;
-    if (selected.size === instituciones.length) {
+    if (!displayInstituciones) return;
+    if (selected.size === displayInstituciones.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(instituciones.map((i: any) => i.id)));
+      setSelected(new Set(displayInstituciones.map((i: any) => i.id)));
     }
   };
 
@@ -190,7 +195,7 @@ export default function Instituciones() {
               onClick={selectAll}
               className="text-caption font-semibold text-primary-600 hover:underline"
             >
-              {selected.size === instituciones?.length ? "Deseleccionar todos" : "Seleccionar todos"}
+              {selected.size === displayInstituciones?.length ? "Deseleccionar todos" : "Seleccionar todos"}
             </button>
             <span className="text-caption text-primary-500">
               {selected.size} seleccionado{selected.size > 1 ? "s" : ""}
@@ -208,11 +213,11 @@ export default function Instituciones() {
       )}
 
       {/* Institution list */}
-      {isLoading ? (
+      {!displayInstituciones && isFetching ? (
         <div className="flex min-h-[40vh] items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-primary-500" />
         </div>
-      ) : !instituciones?.length ? (
+      ) : !displayInstituciones?.length ? (
         <motion.div variants={fadeUp} className="flex flex-col items-center py-16 text-center">
           <div className="rounded-2xl bg-slate-50 p-5">
             <Building2 size={28} className="text-slate-300" />
@@ -221,7 +226,7 @@ export default function Instituciones() {
         </motion.div>
       ) : (
         <motion.div variants={stagger} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {instituciones.map((inst: any) => (
+          {displayInstituciones.map((inst: any) => (
             <motion.div
               key={inst.id}
               variants={fadeUp}

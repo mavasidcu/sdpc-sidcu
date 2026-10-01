@@ -11,6 +11,8 @@ import {
   getUserByCurp,
   contarAcreditacion,
   contarAprobacionPorBloque,
+  exportarTodasSolicitudes,
+  contarInscritosPorCurso,
   getDb,
 } from "../db";
 import { eq, and, or } from "drizzle-orm";
@@ -82,6 +84,21 @@ export const solicitudesRouter = router({
     .query(async ({ input }) => {
       return listarTodasSolicitudes({ estado: input?.estado, page: input?.page, limit: input?.limit });
     }),
+
+  exportarTodas: adminProcedure
+    .input(z.object({ estado: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      return exportarTodasSolicitudes({ estado: input?.estado });
+    }),
+
+  // Reportes.tsx tambien la usa (consultor tiene acceso de solo lectura ahi),
+  // por eso protectedProcedure + check manual en vez de adminProcedure.
+  porCurso: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin" && ctx.user.role !== "consultor") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "No tienes permisos para esta acción" });
+    }
+    return contarInscritosPorCurso();
+  }),
 
   completar: adminProcedure
     .input(z.object({ id: z.number(), calificacion: z.number().min(0).max(100) }))

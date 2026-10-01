@@ -43,9 +43,12 @@ function formatFecha(date: string | Date | null) {
   });
 }
 
+type EstatusFilter = "" | "activo" | "inactivo";
+
 export default function Usuarios() {
   const { user: currentUser } = useAuth();
   const [search, setSearch] = useState("");
+  const [estatusFilter, setEstatusFilter] = useState<EstatusFilter>("");
   const [page, setPage] = useState(1);
   const [roleDropdown, setRoleDropdown] = useState<number | null>(null);
   const [showCrear, setShowCrear] = useState(false);
@@ -54,7 +57,7 @@ export default function Usuarios() {
   const utils = trpc.useUtils();
 
   const { data, isLoading } = trpc.usuarios.listar.useQuery(
-    { search: search || undefined, page },
+    { search: search || undefined, estatus: estatusFilter || undefined, page },
     { retry: false }
   );
   const usuarios = data?.items;
@@ -152,11 +155,37 @@ export default function Usuarios() {
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
-          placeholder="Buscar por nombre o estatus..."
+          placeholder="Buscar por nombre..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 placeholder-slate-400 outline-none transition-all focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
         />
+      </motion.div>
+
+      {/* Filtro de estatus */}
+      <motion.div variants={fadeUp} className="flex flex-wrap gap-2">
+        {(
+          [
+            { value: "", label: "Todos", count: totalActivos + totalInactivos },
+            { value: "activo", label: "Activos", count: totalActivos },
+            { value: "inactivo", label: "Inactivos", count: totalInactivos },
+          ] as { value: EstatusFilter; label: string; count: number }[]
+        ).map((tab) => {
+          const active = estatusFilter === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => { setEstatusFilter(tab.value); setPage(1); }}
+              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+                active
+                  ? "bg-primary-500 text-white shadow-sm shadow-primary-500/25"
+                  : "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              {tab.label} <span className={active ? "opacity-75" : "text-slate-400"}>{tab.count}</span>
+            </button>
+          );
+        })}
       </motion.div>
 
       {/* Solicitudes de baja */}
@@ -173,7 +202,7 @@ export default function Usuarios() {
             <UserCog size={28} className="text-slate-300" />
           </div>
           <p className="mt-4 text-sm font-medium text-slate-400">
-            {search ? "Sin resultados para esa búsqueda" : "Sin usuarios registrados"}
+            {search || estatusFilter ? "Sin resultados para ese filtro" : "Sin usuarios registrados"}
           </p>
         </motion.div>
       ) : (

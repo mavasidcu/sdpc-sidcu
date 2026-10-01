@@ -11,8 +11,15 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from "lucide-react";
 import ImportarCSVModal from "@/components/ImportarCSVModal";
+import {
+  exportarSolicitudesExcel,
+  exportarSolicitudesPDF,
+  exportarCursosPorInscritosExcel,
+  exportarCursosPorInscritosPDF,
+} from "@/lib/exportar";
 
 const stagger = {
   hidden: {},
@@ -82,6 +89,67 @@ export default function GestionSolicitudes() {
 
   const importarCalificacionesMut = trpc.solicitudes.importarCalificaciones.useMutation();
 
+  const [exportando, setExportando] = useState<"excel" | "pdf" | null>(null);
+  const [reporteTipo, setReporteTipo] = useState<"solicitudes" | "porCurso">("solicitudes");
+
+  const handleExportSolicitudes = async (tipo: "excel" | "pdf") => {
+    const { items, total, truncado } = await utils.solicitudes.exportarTodas.fetch({
+      estado: estadoFilter || undefined,
+    });
+    if (truncado) {
+      alert(
+        `Hay ${total} solicitudes que cumplen el filtro, pero solo se exportarán las primeras ${items.length}. Reduce el filtro para exportar el resto.`,
+      );
+    }
+    if (items.length === 0) {
+      alert("No hay datos para exportar");
+      return;
+    }
+    const datos = items.map((item: any) => ({
+      nombreUsuario: item.users?.nombre ?? item.users?.email ?? "",
+      curp: item.users?.curp ?? "",
+      curso: item.cursos?.nombre ?? "",
+      institucion: item.instituciones?.nombre ?? null,
+      bloque: item.cursos?.bloque ?? null,
+      estado: item.solicitudes_curso?.estado ?? "aprobada",
+      calificacion: item.solicitudes_curso?.calificacion ?? null,
+      fechaSolicitud: item.solicitudes_curso?.createdAt,
+    }));
+    if (tipo === "excel") {
+      exportarSolicitudesExcel(datos);
+    } else {
+      exportarSolicitudesPDF(datos);
+    }
+  };
+
+  const handleExportPorCurso = async (tipo: "excel" | "pdf") => {
+    const items = await utils.solicitudes.porCurso.fetch();
+    if (items.length === 0) {
+      alert("No hay datos para exportar");
+      return;
+    }
+    if (tipo === "excel") {
+      exportarCursosPorInscritosExcel(items);
+    } else {
+      exportarCursosPorInscritosPDF(items);
+    }
+  };
+
+  const handleExport = async (tipo: "excel" | "pdf") => {
+    setExportando(tipo);
+    try {
+      if (reporteTipo === "solicitudes") {
+        await handleExportSolicitudes(tipo);
+      } else {
+        await handleExportPorCurso(tipo);
+      }
+    } catch (err: any) {
+      alert("Error al exportar: " + (err.message ?? "desconocido"));
+    } finally {
+      setExportando(null);
+    }
+  };
+
   const handleCompletar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (modal.type !== "completar" || calificacion === "") return;
@@ -94,7 +162,7 @@ export default function GestionSolicitudes() {
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
       {/* Header */}
-      <motion.div variants={fadeUp} className="flex items-end justify-between">
+      <motion.div variants={fadeUp} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
             Solicitudes de Capacitacion
@@ -103,7 +171,41 @@ export default function GestionSolicitudes() {
             Revisa y gestiona las solicitudes de los servidores
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white text-sm font-semibold">
+            <button
+              onClick={() => setReporteTipo("solicitudes")}
+              className={`px-3 py-2.5 transition-colors ${
+                reporteTipo === "solicitudes" ? "bg-primary-500 text-white" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Solicitudes
+            </button>
+            <button
+              onClick={() => setReporteTipo("porCurso")}
+              className={`px-3 py-2.5 transition-colors ${
+                reporteTipo === "porCurso" ? "bg-primary-500 text-white" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Por Curso
+            </button>
+          </div>
+          <button
+            onClick={() => handleExport("excel")}
+            disabled={exportando !== null}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Download size={16} />
+            {exportando === "excel" ? "Exportando..." : "Excel"}
+          </button>
+          <button
+            onClick={() => handleExport("pdf")}
+            disabled={exportando !== null}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Download size={16} />
+            {exportando === "pdf" ? "Exportando..." : "PDF"}
+          </button>
           <button
             onClick={() => setShowImportCalificaciones(true)}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"

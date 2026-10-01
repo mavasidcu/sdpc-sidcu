@@ -27,6 +27,7 @@ interface ServidorExport {
   nivel: string;
   fechaIngreso: string | Date;
   datosContacto?: string | null;
+  email?: string | null;
   grupoFuncion: string;
   upa?: string | null;
   cmao?: string | null;
@@ -50,25 +51,64 @@ function formatFecha(date: string | Date): string {
   });
 }
 
+// Para timestamps reales (createdAt) -- a diferencia de fechaIngreso, estos no
+// son "medianoche UTC" sino el momento exacto en que paso algo. Forzar UTC aqui
+// corre la fecha un dia adelante para cualquiera que actuo de noche en Mexico
+// (UTC-6): su timestamp real ya cruzo a la madrugada UTC del dia siguiente.
+function formatFechaHora(date: string | Date): string {
+  const d = new Date(date);
+  return d.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 const NIVEL_PROG_LABELS: Record<number, string> = { 0: "Nuevo ingreso", 1: "N1", 2: "N2", 3: "N3", 4: "N4", 5: "N5" };
+
+// Fecha LOCAL (no UTC) para nombre de archivo y texto "Generado:" -- deben
+// coincidir entre si. Antes el nombre de archivo usaba toISOString() (UTC)
+// y el texto interno usaba toLocaleDateString() (hora local del navegador),
+// dos bases distintas para el mismo momento: en Mexico (UTC-6), ya entrada
+// la noche local UTC ya rodo al dia siguiente, y el archivo salia fechado
+// un dia adelante del texto "Generado:" que mostraba el dia local real.
+function fechaLocalISO(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Excel/Sheets tratan una celda que empieza con =, +, -, @ (o tab/CR) como
+// formula al abrirla -- si ese texto viene de un campo cargado por CSV u
+// onboarding (nombre, cargo, observaciones, etc.), es una via de inyeccion de
+// formulas. Anteponer una comilla simple fuerza texto plano sin cambiar lo
+// que se ve en la celda.
+const CSV_FORMULA_PREFIXES = ["=", "+", "-", "@", "\t", "\r"];
+function sanitizeCell(value: string): string {
+  if (!value) return value;
+  return CSV_FORMULA_PREFIXES.includes(value[0]) ? `'${value}` : value;
+}
 
 function prepararDatos(items: ServidorExport[]) {
   return items.map((s) => ({
-    "Nombre Completo": s.nombreCompleto,
-    RFC: s.rfc,
-    CURP: s.curp,
-    Cargo: s.cargo,
-    Dependencia: s.dependencia,
-    "UPA (Sector)": s.upa ?? "",
-    CMAO: s.cmao ?? "",
-    "UA (Dirección)": s.ua ?? "",
-    "Preparación Académica": s.preparacionAcademica ?? "",
+    "Nombre Completo": sanitizeCell(s.nombreCompleto),
+    RFC: sanitizeCell(s.rfc),
+    CURP: sanitizeCell(s.curp),
+    Cargo: sanitizeCell(s.cargo),
+    Dependencia: sanitizeCell(s.dependencia),
+    "UPA (Sector)": sanitizeCell(s.upa ?? ""),
+    CMAO: sanitizeCell(s.cmao ?? ""),
+    "UA (Dirección)": sanitizeCell(s.ua ?? ""),
+    "Preparación Académica": sanitizeCell(s.preparacionAcademica ?? ""),
     "Nivel Progresión": NIVEL_PROG_LABELS[s.nivelProgresion ?? 0] ?? `N${s.nivelProgresion}`,
     "Fecha de Ingreso": formatFecha(s.fechaIngreso),
-    "Datos de Contacto": s.datosContacto ?? "",
+    "Datos de Contacto": sanitizeCell(s.datosContacto ?? ""),
+    Email: sanitizeCell(s.email ?? ""),
     "Grupo de Función": GRUPO_LABELS[s.grupoFuncion] ?? s.grupoFuncion,
     Estatus: s.estatus === "activo" ? "Activo" : "Inactivo",
-    Observaciones: s.observaciones ?? "",
+    Observaciones: sanitizeCell(s.observaciones ?? ""),
   }));
 }
 
@@ -89,6 +129,7 @@ export function exportarExcel(items: ServidorExport[], filename = "servidores_pu
     { wch: 15 }, // Nivel Progresión
     { wch: 15 }, // Fecha
     { wch: 25 }, // Contacto
+    { wch: 25 }, // Email
     { wch: 18 }, // Grupo
     { wch: 10 }, // Estatus
     { wch: 30 }, // Observaciones
@@ -97,7 +138,7 @@ export function exportarExcel(items: ServidorExport[], filename = "servidores_pu
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Servidores Públicos");
-  XLSX.writeFile(wb, `${filename}_${new Date().toISOString().split("T")[0]}.xlsx`);
+  XLSX.writeFile(wb, `${filename}_${fechaLocalISO()}.xlsx`);
 }
 
 export function exportarPDF(items: ServidorExport[], filename = "servidores_publicos") {
@@ -130,6 +171,7 @@ export function exportarPDF(items: ServidorExport[], filename = "servidores_publ
     "UA",
     "Nivel",
     "Fecha Ingreso",
+    "Email",
     "Grupo",
     "Estatus",
   ];
@@ -145,6 +187,7 @@ export function exportarPDF(items: ServidorExport[], filename = "servidores_publ
     s.ua ?? "",
     NIVEL_PROG_LABELS[s.nivelProgresion ?? 0] ?? `N${s.nivelProgresion}`,
     formatFecha(s.fechaIngreso),
+    s.email ?? "",
     GRUPO_LABELS[s.grupoFuncion] ?? s.grupoFuncion,
     s.estatus === "activo" ? "Activo" : "Inactivo",
   ]);
@@ -171,5 +214,191 @@ export function exportarPDF(items: ServidorExport[], filename = "servidores_publ
     margin: { left: 10, right: 10 },
   });
 
-  doc.save(`${filename}_${new Date().toISOString().split("T")[0]}.pdf`);
+  doc.save(`${filename}_${fechaLocalISO()}.pdf`);
+}
+
+interface SolicitudExport {
+  nombreUsuario: string;
+  curp: string;
+  curso: string;
+  institucion?: string | null;
+  bloque?: number | null;
+  estado: string;
+  calificacion?: number | null;
+  fechaSolicitud: string | Date;
+}
+
+const ESTADO_SOLICITUD_LABELS: Record<string, string> = {
+  aprobada: "Aprobada",
+  completada: "Completada",
+  pendiente: "Pendiente",
+  rechazada: "Rechazada",
+};
+
+function prepararDatosSolicitudes(items: SolicitudExport[]) {
+  return items.map((s) => ({
+    Servidor: sanitizeCell(s.nombreUsuario),
+    CURP: sanitizeCell(s.curp),
+    Curso: sanitizeCell(s.curso),
+    Institución: sanitizeCell(s.institucion ?? ""),
+    Bloque: s.bloque ?? "",
+    Estado: ESTADO_SOLICITUD_LABELS[s.estado] ?? s.estado,
+    Calificación: s.calificacion ?? "",
+    "Fecha de Inscripción": formatFechaHora(s.fechaSolicitud),
+  }));
+}
+
+export function exportarSolicitudesExcel(items: SolicitudExport[], filename = "cursos_inscritos") {
+  const datos = prepararDatosSolicitudes(items);
+  const ws = XLSX.utils.json_to_sheet(datos);
+
+  ws["!cols"] = [
+    { wch: 30 }, // Servidor
+    { wch: 20 }, // CURP
+    { wch: 35 }, // Curso
+    { wch: 25 }, // Institución
+    { wch: 10 }, // Bloque
+    { wch: 14 }, // Estado
+    { wch: 12 }, // Calificación
+    { wch: 16 }, // Fecha
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Cursos Inscritos");
+  XLSX.writeFile(wb, `${filename}_${fechaLocalISO()}.xlsx`);
+}
+
+export function exportarSolicitudesPDF(items: SolicitudExport[], filename = "cursos_inscritos") {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "letter" });
+
+  doc.setFontSize(16);
+  doc.setTextColor(97, 18, 50);
+  doc.text("Secretaría de Cultura", 14, 15);
+
+  doc.setFontSize(11);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Cursos Inscritos por Servidores Públicos", 14, 22);
+
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text(
+    `Generado: ${new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })} · ${items.length} registros`,
+    14,
+    28,
+  );
+
+  const headers = ["Servidor", "CURP", "Curso", "Institución", "Bloque", "Estado", "Calificación", "Fecha"];
+
+  const rows = items.map((s) => [
+    s.nombreUsuario,
+    s.curp,
+    s.curso,
+    s.institucion ?? "",
+    s.bloque != null ? String(s.bloque) : "",
+    ESTADO_SOLICITUD_LABELS[s.estado] ?? s.estado,
+    s.calificacion != null ? String(s.calificacion) : "",
+    formatFechaHora(s.fechaSolicitud),
+  ]);
+
+  autoTable(doc, {
+    head: [headers],
+    body: rows,
+    startY: 33,
+    styles: {
+      fontSize: 7,
+      cellPadding: 1.5,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [97, 18, 50],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 7.5,
+    },
+    alternateRowStyles: {
+      fillColor: [253, 242, 245],
+    },
+    margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`${filename}_${fechaLocalISO()}.pdf`);
+}
+
+
+interface CursoInscritosExport {
+  nombre: string;
+  bloque?: number | null;
+  total: number;
+}
+
+function prepararDatosCursosPorInscritos(items: CursoInscritosExport[]) {
+  return items.map((c) => ({
+    Curso: sanitizeCell(c.nombre),
+    Bloque: c.bloque ?? "",
+    "Total Inscritos": c.total,
+  }));
+}
+
+export function exportarCursosPorInscritosExcel(items: CursoInscritosExport[], filename = "cursos_por_inscritos") {
+  const datos = prepararDatosCursosPorInscritos(items);
+  const ws = XLSX.utils.json_to_sheet(datos);
+
+  ws["!cols"] = [
+    { wch: 40 }, // Curso
+    { wch: 10 }, // Bloque
+    { wch: 16 }, // Total Inscritos
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Cursos por Inscritos");
+  XLSX.writeFile(wb, `${filename}_${fechaLocalISO()}.xlsx`);
+}
+
+export function exportarCursosPorInscritosPDF(items: CursoInscritosExport[], filename = "cursos_por_inscritos") {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
+
+  doc.setFontSize(16);
+  doc.setTextColor(97, 18, 50);
+  doc.text("Secretaría de Cultura", 14, 15);
+
+  doc.setFontSize(11);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Cursos por Número de Inscritos", 14, 22);
+
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text(
+    `Generado: ${new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })} · ${items.length} cursos`,
+    14,
+    28,
+  );
+
+  const headers = ["Curso", "Bloque", "Total Inscritos"];
+
+  const rows = items.map((c) => [c.nombre, c.bloque != null ? String(c.bloque) : "", String(c.total)]);
+
+  autoTable(doc, {
+    head: [headers],
+    body: rows,
+    startY: 33,
+    styles: {
+      fontSize: 8,
+      cellPadding: 2,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [97, 18, 50],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8.5,
+    },
+    alternateRowStyles: {
+      fillColor: [253, 242, 245],
+    },
+    margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`${filename}_${fechaLocalISO()}.pdf`);
 }
