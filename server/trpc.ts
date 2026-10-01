@@ -56,6 +56,25 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
+// Variante de protectedProcedure para procedures que una cuenta on-the-fly
+// de Evaluadores restringida (evaluadorCuentaExpiraEn vigente) no debe
+// poder llamar directo por API, aunque el frontend ya le esconda el link
+// (App.tsx gate) -- ese gate es solo route-hiding del lado cliente, esto
+// es el chequeo real del lado servidor. Import dinamico de ./db (mismo
+// patron ya usado en authRouter.me para estadoRestriccionEvaluador) para
+// evitar el ciclo de imports server/trpc.ts <-> server/db.ts.
+export const protectedProcedureSinRestriccion = protectedProcedure.use(async ({ ctx, next }) => {
+  const { estadoRestriccionEvaluador } = await import("./db");
+  const { restringido } = await estadoRestriccionEvaluador(ctx.user.id);
+  if (restringido) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Tu cuenta está restringida a la pantalla de evaluación.",
+    });
+  }
+  return next({ ctx });
+});
+
 export const adminProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "No autenticado" });

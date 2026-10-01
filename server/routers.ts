@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { randomBytes } from "crypto";
-import { hashPassword, verifyPassword, generateToken } from "./auth";
+import { hashPassword, verifyPassword, generateToken, hashTokenRestablecimiento } from "./auth";
 import { verificarTurnstile } from "./turnstile";
 import { capitalizarNombre } from "../shared/utils";
 import {
@@ -14,7 +14,7 @@ import {
   marcarTokenComoUsado,
 } from "./db";
 import { COOKIE_NAME } from "../shared/const";
-import { router, publicProcedure, protectedProcedure } from "./trpc";
+import { router, publicProcedure } from "./trpc";
 import { servidoresRouter } from "./routers/servidores";
 import { usuariosRouter } from "./routers/usuarios";
 import { importacionRouter } from "./routers/importacion";
@@ -23,6 +23,9 @@ import { cursosRouter } from "./routers/cursos";
 import { institucionesRouter } from "./routers/instituciones";
 import { solicitudesRouter } from "./routers/solicitudes";
 import { inconformidadRouter } from "./routers/inconformidad";
+import { promocionRouter } from "./routers/promocion";
+import { autoevaluacionRouter } from "./routers/autoevaluacion";
+import { evaluadoresRouter } from "./routers/evaluadores";
 
 export { router, publicProcedure };
 
@@ -138,7 +141,12 @@ const authRouter = router({
       };
     }),
 
-  me: publicProcedure.query(({ ctx }) => ctx.user ?? null),
+  me: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user) return null;
+    const { estadoRestriccionEvaluador } = await import("./db");
+    const restriccion = await estadoRestriccionEvaluador(ctx.user.id);
+    return { ...ctx.user, restriccionEvaluador: restriccion };
+  }),
 
   logout: publicProcedure.mutation(({ ctx }) => {
     ctx.res.clearCookie(COOKIE_NAME);
@@ -150,10 +158,14 @@ const authRouter = router({
     .mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email);
       if (!user) return { success: true }; // don't reveal if user exists
+      // El token en claro es lo que iria en el link del correo (todavia sin
+      // construir, ver Pendiente en CLAUDE.md) -- la DB solo guarda su hash
+      // (hallazgo de auditoria DBA: guardarlo en claro exponia el link real
+      // a cualquiera con lectura de la tabla).
       const token = randomBytes(32).toString("hex");
       await crearTokenRestablecimiento(
         user.id,
-        token,
+        hashTokenRestablecimiento(token),
         new Date(Date.now() + 24 * 60 * 60 * 1000),
       );
       // TODO: send email with reset link
@@ -163,7 +175,7 @@ const authRouter = router({
   restablecerContrasena: publicProcedure
     .input(z.object({ token: z.string(), password: z.string().min(8) }))
     .mutation(async ({ input }) => {
-      const record = await obtenerTokenRestablecimiento(input.token);
+      const record = await obtenerTokenRestablecimiento(hashTokenRestablecimiento(input.token));
       if (!record || record.usedAt || new Date() > record.expiresAt) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -187,6 +199,9 @@ export const appRouter = router({
   instituciones: institucionesRouter,
   solicitudes: solicitudesRouter,
   inconformidad: inconformidadRouter,
+  promocion: promocionRouter,
+  autoevaluacion: autoevaluacionRouter,
+  evaluadores: evaluadoresRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -15,6 +15,14 @@ if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
 
+// El PUT de subida de PDF (Inconformidad) va del navegador directo al bucket
+// via URL firmada -- sin el host de S3 en connect-src, el navegador bloquea
+// el request aunque la firma sea valida (hallazgo real probando con AWS real).
+const s3ConnectSrc =
+  process.env.AWS_S3_BUCKET && process.env.AWS_REGION
+    ? [`https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com`]
+    : [];
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -27,7 +35,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
       fontSrc: ["'self'", "fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://cloudflareinsights.com"],
+      connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://cloudflareinsights.com", ...s3ConnectSrc],
       frameSrc: ["https://challenges.cloudflare.com"],
       objectSrc: ["'none'"],
     },
@@ -44,8 +52,18 @@ app.get("/api/health", async (_req, res) => {
     const { getDb } = await import("./db");
     const { dbCircuitBreaker } = await import("./middleware/circuitBreaker");
     const { sql } = await import("drizzle-orm");
-    const d = await getDb();
-    await d.execute(sql`SELECT 1`);
+    // Hallazgo de auditoria DBA: antes este SELECT 1 iba directo, sin pasar
+    // por el circuit breaker -- dbCircuitBreaker.getState() de la linea de
+    // abajo siempre reportaba "CLOSED" (nada lo alimentaba con fallos
+    // reales), asi que el campo "circuit" del health check era decorativo,
+    // nunca reflejaba saturacion real. Envolverlo aqui hace que rachas de
+    // fallos reales de conectividad SI abran el circuito (30s de pausa,
+    // ver circuitBreaker.ts) antes de que Railway siga mandando trafico a
+    // una DB ya en apuros.
+    await dbCircuitBreaker.execute(async () => {
+      const d = await getDb();
+      await d.execute(sql`SELECT 1`);
+    });
     const circuit = dbCircuitBreaker.getState();
     res.json({
       status: "ok",
@@ -87,6 +105,12 @@ if (process.env.NODE_ENV === "production") {
   });
   app.use(vite.middlewares);
 }
+
+const { iniciarWorkerCorreosPromocion } = await import("./lib/promocionCorreoWorker");
+iniciarWorkerCorreosPromocion();
+
+const { iniciarWorkerExpiracionEvaluadores } = await import("./lib/evaluadorExpiracionWorker");
+iniciarWorkerExpiracionEvaluadores();
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 app.listen(PORT, () => {
