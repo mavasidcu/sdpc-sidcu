@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
+import { fadeUp } from "@/lib/animations";
 import { trpc } from "@/lib/trpc";
 import { parseCSV } from "@/lib/csv";
 import {
@@ -71,11 +72,6 @@ interface ImportResult {
   creados: number;
   errores: Array<{ fila: number; error: string }>;
 }
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
-};
 
 export default function Importacion() {
   const [paso, setPaso] = useState<Paso>("subir");

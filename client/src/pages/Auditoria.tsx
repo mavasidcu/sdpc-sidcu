@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { fadeUp } from "@/lib/animations";
 import { trpc } from "@/lib/trpc";
 import {
   ClipboardList,
@@ -23,14 +24,11 @@ const ACCION_CONFIG: Record<string, { icon: React.ElementType; bg: string; text:
   eliminar: { icon: Trash2, bg: "bg-rose-50", text: "text-rose-600", label: "Eliminado" },
 };
 
+// Stagger propio (mas rapido que el default 0.05 de @/lib/animations) --
+// esta pantalla suele listar muchas filas de auditoria seguidas.
 const stagger = {
   hidden: {},
   show: { transition: { staggerChildren: 0.04 } },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
 };
 
 function formatFecha(date: string | Date) {

@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
+import { stagger, fadeUp } from "@/lib/animations";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -18,19 +19,9 @@ import ImportarCSVModal from "@/components/ImportarCSVModal";
 import CursoModal, { emptyForm, type ModalState, type CursoFormData } from "@/components/cursos/CursoModal";
 import { TIPO_PROGRAMA_LABELS } from "@shared/const";
 
-const stagger = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08 } },
-};
-const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] } },
-};
-
 // Cursos son 100% virtuales: no hay limite real de cupo. Se manda un valor
 // alto fijo para satisfacer la columna NOT NULL sin exponer el concepto en UI.
 const CUPO_SIN_LIMITE = 9999;
-
 
 export default function GestionCursos() {
   const { user } = useAuth();
@@ -209,7 +200,7 @@ export default function GestionCursos() {
       duracionHoras: Number(form.duracionHoras),
       modalidad: form.modalidad as "presencial" | "virtual" | "mixto",
       tipoPrograma: form.tipoPrograma as "PAC" | "SPC" | "SDPC",
-      bloque: form.bloque ? Number(form.bloque) : undefined,
+      bloque: Number(form.bloque),
       // El backend resuelve/valida la finalidad final segun tipoPrograma
       // (fija para SPC/SDPC, una de las 4 opciones para PAC) -- aqui solo
       // se manda lo que el usuario eligio/ve en pantalla.
@@ -515,7 +506,6 @@ export default function GestionCursos() {
           </div>
         )
       )}
-
 
       {/* Create/Edit Modal */}
       {(modal.type === "create" || modal.type === "edit") && (
