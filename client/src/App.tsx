@@ -41,12 +41,18 @@ const GestionAutoevaluacion = lazy(() => import("@/pages/GestionAutoevaluacion")
 const GestionEvaluadores = lazy(() => import("@/pages/GestionEvaluadores"));
 const CentroModulos = lazy(() => import("@/pages/CentroModulos"));
 
+// null, no un spinner: el fallback de Suspense es un tipo de elemento raiz
+// (div) distinto al de la pagina real (motion.div) -- cuando el chunk
+// termina de cargar, React ve 2 tipos distintos en el mismo lugar, desmonta
+// el fallback y monta la pagina de cero, asi que su animacion de entrada
+// (fadeUp) se reproduce recien ahi. Visualmente: "aparece el spinner, y la
+// pagina real vuelve a entrar" -- mismo mecanismo exacto que ya se arreglo
+// para el isLoading interno de cada pagina (ver commit de unificacion de
+// motion.div), reintroducido aqui por el Suspense del lazy loading. Los
+// chunks pesan pocos KB, el fallback casi nunca alcanza a verse -- con null
+// la unica animacion de entrada que el usuario ve es la real de la pagina.
 function RouteFallback() {
-  return (
-    <div className="flex h-64 items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-    </div>
-  );
+  return null;
 }
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
