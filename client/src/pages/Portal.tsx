@@ -357,7 +357,12 @@ export default function Portal() {
       <motion.div variants={fadeUp} className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-card-rest">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">{user?.nombre ?? "Usuario"}</h2>
+            {/* servidor.nombreCompleto primero: user.nombre viene del JWT
+                (snapshot del login, vive hasta 7 dias) -- un admin que
+                corrija el nombre desde /servidores no se refleja aqui hasta
+                re-login si se prioriza el del token. servidor viene de una
+                query viva (trpc.servidores.miServidor), siempre al dia. */}
+            <h2 className="text-lg font-bold text-slate-900">{servidor?.nombreCompleto ?? user?.nombre ?? "Usuario"}</h2>
             {servidor?.cargo && <p className="text-sm text-slate-600">{servidor.cargo}</p>}
             {servidor?.dependencia && <p className="text-sm text-slate-400">{servidor.dependencia}</p>}
           </div>
@@ -505,7 +510,9 @@ export default function Portal() {
             });
 
             generarCedula({
-              nombre: user.nombre ?? servidor.nombreCompleto ?? "Sin nombre",
+              // Mismo criterio que la tarjeta de perfil arriba: servidor
+              // (query viva) antes que user.nombre (JWT, hasta 7 dias viejo).
+              nombre: servidor.nombreCompleto ?? user.nombre ?? "Sin nombre",
               curp: servidor.curp,
               email: servidor.email ?? "",
               cargo: servidor.cargo ?? "",
