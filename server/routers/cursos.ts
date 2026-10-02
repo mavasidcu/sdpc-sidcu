@@ -40,7 +40,11 @@ const cursoInput = z.object({
   duracionHoras: z.number().int().positive(),
   modalidad: z.enum(["presencial", "virtual", "mixto"]),
   tipoPrograma: z.enum(["PAC", "SPC", "SDPC"]),
-  bloque: z.number().int().nullable().optional(),
+  // Requerido: sin bloque, solicitudes.ts no puede aplicar el limite de 1
+  // curso activo por bloque (bug real, cursos existentes en local quedaron
+  // con bloque NULL y el limite se saltaba entero). Solo 2 bloques existen
+  // en el diseño curricular real (Bloque 1 antes que Bloque 2).
+  bloque: z.number().int().min(1).max(2),
   numero: z.number().int().nullable().optional(),
   institucionResponsable: z.string().nullable().optional(),
   finalidad: z.string().nullable().optional(),

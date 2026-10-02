@@ -180,14 +180,16 @@ export default function CursoModal({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Bloque</label>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Bloque *</label>
               <input
                 type="number"
+                required
                 min={1}
+                max={2}
                 value={form.bloque}
                 onChange={(e) => onFormChange({ ...form, bloque: e.target.value })}
                 className={inputClass}
-                placeholder="Ej. 1"
+                placeholder="1 o 2"
               />
             </div>
           </div>
