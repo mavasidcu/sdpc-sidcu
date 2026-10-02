@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { useAuthState } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { SkeletonPage } from "@/components/Skeleton";
 import RecuperarContrasena from "@/pages/RecuperarContrasena";
 import RestablecerContrasena from "@/pages/RestablecerContrasena";
 import NotFound from "@/pages/NotFound";
@@ -41,18 +42,16 @@ const GestionAutoevaluacion = lazy(() => import("@/pages/GestionAutoevaluacion")
 const GestionEvaluadores = lazy(() => import("@/pages/GestionEvaluadores"));
 const CentroModulos = lazy(() => import("@/pages/CentroModulos"));
 
-// null, no un spinner: el fallback de Suspense es un tipo de elemento raiz
-// (div) distinto al de la pagina real (motion.div) -- cuando el chunk
-// termina de cargar, React ve 2 tipos distintos en el mismo lugar, desmonta
-// el fallback y monta la pagina de cero, asi que su animacion de entrada
-// (fadeUp) se reproduce recien ahi. Visualmente: "aparece el spinner, y la
-// pagina real vuelve a entrar" -- mismo mecanismo exacto que ya se arreglo
-// para el isLoading interno de cada pagina (ver commit de unificacion de
-// motion.div), reintroducido aqui por el Suspense del lazy loading. Los
-// chunks pesan pocos KB, el fallback casi nunca alcanza a verse -- con null
-// la unica animacion de entrada que el usuario ve es la real de la pagina.
+// SkeletonPage generico, no null: verificado en vivo contra produccion real
+// (15 secciones de admin, login real) con un MutationObserver -- confirmado
+// que NO hay doble entrada (eso ya se arreglo, ver commit de App.tsx
+// anterior). Lo que queda es el hueco en blanco real de ~300-500ms+ (chunk
+// + datos) antes de que la pagina aparezca de golpe con su fundido -- en
+// una conexion real eso se percibe como "parpadeo" aunque tecnicamente sea
+// una sola animacion. SkeletonPage llena ese hueco con contenido generico
+// (no pantalla en blanco) mientras carga.
 function RouteFallback() {
-  return null;
+  return <SkeletonPage />;
 }
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
