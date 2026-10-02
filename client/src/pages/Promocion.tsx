@@ -97,33 +97,15 @@ export default function Promocion() {
     },
   });
 
-  if (isLoading || !data) {
-    return (
-      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
-        <motion.div variants={fadeUp} className="flex h-64 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-        </motion.div>
-      </motion.div>
-    );
-  }
-
-  // Una inscripcion YA confirmada (data.yaInscrito) siempre se puede seguir
-  // viendo -- esto solo bloquea a quien todavia no confirma la suya mientras
-  // el modulo esta en pausa (mismo criterio "pausa total" que Inconformidad).
-  if (moduloHabilitado === false && !data.yaInscrito) {
-    return (
-      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
-        <motion.div variants={fadeUp}>
-          <h1 className="text-2xl font-bold text-gray-900">Inscripción a Promoción</h1>
-        </motion.div>
-        <motion.div variants={fadeUp} className="rounded-2xl bg-white p-8 text-center shadow-card-rest border border-gray-100">
-          <Award className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-3 font-medium text-gray-700">Esta sección no está disponible por ahora</p>
-          <p className="mt-1 text-sm text-gray-500">Vuelve a intentarlo más tarde.</p>
-        </motion.div>
-      </motion.div>
-    );
-  }
+  // Un solo return, header siempre presente desde el primer render -- antes
+  // "cargando"/"pausado"/"formulario" eran 3 returns distintos, cada uno con
+  // su propio header. El header no existia en el render de "cargando", asi
+  // que montaba de cero (con su propio fadeUp) en cuanto los datos
+  // llegaban -- ese es el "parpadeo" reportado en produccion. Con el header
+  // unico, su fadeUp solo se reproduce UNA vez, al entrar a la pagina --
+  // mismo criterio que Inconformidad.tsx.
+  const dataLoading = isLoading || !data;
+  const bloqueadoPorPausa = !dataLoading && moduloHabilitado === false && !data.yaInscrito;
 
   const listoParaConfirmar = jefe?.correo && companero1?.correo && companero2?.correo;
 
@@ -140,7 +122,18 @@ export default function Promocion() {
         <h1 className="text-2xl font-bold text-gray-900">Inscripción a Promoción</h1>
       </motion.div>
 
-      <motion.div variants={fadeUp} className="rounded-2xl bg-white p-8 shadow-card-rest border border-gray-100">
+      {dataLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+        </div>
+      ) : bloqueadoPorPausa ? (
+        <div className="rounded-2xl bg-white p-8 text-center shadow-card-rest border border-gray-100">
+          <Award className="mx-auto h-10 w-10 text-gray-300" />
+          <p className="mt-3 font-medium text-gray-700">Esta sección no está disponible por ahora</p>
+          <p className="mt-1 text-sm text-gray-500">Vuelve a intentarlo más tarde.</p>
+        </div>
+      ) : (
+      <div className="rounded-2xl bg-white p-8 shadow-card-rest border border-gray-100">
         {"calificacion1" in data && data.calificacion1 !== undefined && data.calificacion2 !== undefined ? (
           <div className={`overflow-hidden rounded-xl border ${data.elegible ? "border-emerald-200" : "border-rose-200"}`}>
             <div className={`flex items-center justify-between gap-3 border-b px-5 py-3 ${data.elegible ? "border-emerald-100 bg-emerald-50/70" : "border-rose-100 bg-rose-50/70"}`}>
@@ -215,7 +208,8 @@ export default function Promocion() {
             <p className="mt-1 text-center text-sm text-gray-500">Necesitas completar 2 cursos cuyo promedio sea mínimo 70.</p>
           </>
         )}
-      </motion.div>
+      </div>
+      )}
 
       <ConfirmModal
         open={confirmando}

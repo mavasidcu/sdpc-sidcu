@@ -105,60 +105,22 @@ export default function Inconformidad() {
     return null;
   }
 
-  if (perfilLoading || configLoading || incLoading || moduloLoading) {
-    return (
-      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
-        <motion.div variants={fadeUp} className="flex h-64 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-        </motion.div>
-      </motion.div>
-    );
-  }
-
-  if (inconformidad?.estado === "enviado") {
-    return (
-      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
-        <motion.div variants={fadeUp}>
-          <h1 className="text-2xl font-bold text-gray-900">Inconformidad</h1>
-          <p className="mt-1 text-gray-500">Tu inconformidad ya fue enviada</p>
-        </motion.div>
-        <motion.div variants={fadeUp} className="rounded-2xl bg-white p-6 shadow-card-rest border border-gray-100">
-          <div className="flex items-center gap-2 text-emerald-700">
-            <CheckCircle2 size={20} />
-            <p className="font-semibold">Enviada correctamente</p>
-          </div>
-          <ul className="mt-4 space-y-2">
-            {inconformidad.factores.map((f) => (
-              <li key={f.id} className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
-                <p className="font-medium text-gray-800">{FACTOR_LABELS[f.factor]}</p>
-                <p className="mt-1 whitespace-pre-wrap">{f.mensaje}</p>
-              </li>
-            ))}
-          </ul>
-        </motion.div>
-      </motion.div>
-    );
-  }
-
-  // Un caso YA enviado (bloque de arriba) siempre se puede seguir viendo --
-  // esto solo bloquea a quien todavia no ha terminado/enviado el suyo
-  // mientras el módulo está en pausa (decisión "pausa total" confirmada con
-  // el cliente).
-  if (!moduloHabilitado) {
-    return (
-      <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
-        <motion.div variants={fadeUp}>
-          <h1 className="text-2xl font-bold text-gray-900">Inconformidad</h1>
-        </motion.div>
-        <motion.div variants={fadeUp} className="rounded-2xl bg-white p-8 text-center shadow-card-rest border border-gray-100">
-          <FileWarning className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-3 font-medium text-gray-700">Esta sección no está disponible por ahora</p>
-          <p className="mt-1 text-sm text-gray-500">Vuelve a intentarlo más tarde.</p>
-        </motion.div>
-      </motion.div>
-    );
-  }
-
+  // Un solo return, header siempre presente desde el primer render -- antes
+  // cada estado (cargando/enviado/pausado/formulario) era un `return`
+  // distinto, cada uno con su propio <motion.div> de header. El header no
+  // existia en el render de "cargando", asi que montaba de cero (con su
+  // propio fadeUp) en cuanto los datos llegaban -- ese es el "parpadeo"
+  // reportado en produccion (invisible en local por la latencia casi nula).
+  // Con el header unico y siempre montado, su fadeUp solo se reproduce UNA
+  // vez, al entrar a la pagina -- el cuerpo de abajo es el unico que
+  // cambia segun el estado, y ya sin motion.div (mismo criterio que
+  // Auditoria/Usuarios/Reportes/Servidores/Dashboard).
+  const dataLoading = perfilLoading || configLoading || incLoading || moduloLoading;
+  const yaEnviado = inconformidad?.estado === "enviado";
+  // Un caso YA enviado siempre se puede seguir viendo -- la pausa del modulo
+  // solo bloquea a quien todavia no ha terminado/enviado el suyo (decision
+  // "pausa total" confirmada con el cliente).
+  const bloqueadoPorPausa = !dataLoading && !yaEnviado && !moduloHabilitado;
   const factoresGuardados = inconformidad?.factores ?? [];
   const puedeEnviar = factoresGuardados.length > 0;
 
@@ -166,14 +128,44 @@ export default function Inconformidad() {
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={fadeUp}>
         <h1 className="text-2xl font-bold text-gray-900">Inconformidad</h1>
-        <p className="mt-1 text-gray-500">Selecciona el factor o factores sobre los que te quieres inconformar</p>
+        {!dataLoading && yaEnviado && <p className="mt-1 text-gray-500">Tu inconformidad ya fue enviada</p>}
+        {!dataLoading && !yaEnviado && !bloqueadoPorPausa && (
+          <p className="mt-1 text-gray-500">Selecciona el factor o factores sobre los que te quieres inconformar</p>
+        )}
       </motion.div>
 
+      {dataLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+        </div>
+      ) : yaEnviado ? (
+        <div className="rounded-2xl bg-white p-6 shadow-card-rest border border-gray-100">
+          <div className="flex items-center gap-2 text-emerald-700">
+            <CheckCircle2 size={20} />
+            <p className="font-semibold">Enviada correctamente</p>
+          </div>
+          <ul className="mt-4 space-y-2">
+            {inconformidad!.factores.map((f) => (
+              <li key={f.id} className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
+                <p className="font-medium text-gray-800">{FACTOR_LABELS[f.factor]}</p>
+                <p className="mt-1 whitespace-pre-wrap">{f.mensaje}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : bloqueadoPorPausa ? (
+        <div className="rounded-2xl bg-white p-8 text-center shadow-card-rest border border-gray-100">
+          <FileWarning className="mx-auto h-10 w-10 text-gray-300" />
+          <p className="mt-3 font-medium text-gray-700">Esta sección no está disponible por ahora</p>
+          <p className="mt-1 text-sm text-gray-500">Vuelve a intentarlo más tarde.</p>
+        </div>
+      ) : (
+      <>
       {errorGeneral && (
         <DismissibleAlert mensaje={errorGeneral} onCerrar={() => setErrorGeneral(null)} />
       )}
 
-      <motion.div variants={stagger} className="space-y-4">
+      <div className="space-y-4">
         {(factoresConfig ?? []).map((fc) => {
           const guardado = factoresGuardados.find((f) => f.factor === fc.factor);
           const noDisponible = !fc.habilitado && !guardado;
@@ -186,7 +178,7 @@ export default function Inconformidad() {
           const texto = textos[fc.factor] ?? guardado?.mensaje ?? "";
 
           return (
-            <motion.div key={fc.factor} variants={fadeUp} className="rounded-2xl bg-white p-5 shadow-card-rest border border-gray-100">
+            <div key={fc.factor} className="rounded-2xl bg-white p-5 shadow-card-rest border border-gray-100">
               <label className="flex items-start gap-3">
                 <input
                   type="checkbox"
@@ -256,19 +248,19 @@ export default function Inconformidad() {
                   )}
                 </div>
               )}
-            </motion.div>
+            </div>
           );
         })}
-      </motion.div>
+      </div>
 
       {!puedeEnviar && (
-        <motion.div variants={fadeUp} className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
           <FileWarning size={16} />
           Guarda al menos un factor antes de poder enviar.
-        </motion.div>
+        </div>
       )}
 
-      <motion.div variants={fadeUp}>
+      <div>
         <button
           type="button"
           disabled={!puedeEnviar}
@@ -277,7 +269,9 @@ export default function Inconformidad() {
         >
           Enviar / Finalizar
         </button>
-      </motion.div>
+      </div>
+      </>
+      )}
 
       <ConfirmModal
         open={confirmandoEnvio}

@@ -53,13 +53,18 @@ export default function MisSolicitudes() {
         <p className="mt-1 text-gray-500">Historial de tus solicitudes de inscripcion a cursos</p>
       </motion.div>
 
-      {/* Solicitudes List */}
+      {/* Solicitudes List -- div plano en las 3 ramas, no motion.div: este
+          bloque entero depende de `solicitudes` (query async), no puede
+          existir antes de que los datos lleguen, asi que animarlo con
+          fadeUp siempre se ve como una entrada tardia separada del resto de
+          la pagina (el "parpadeo" reportado en produccion). Mismo criterio
+          que Auditoria/Usuarios/Reportes/Servidores/Inconformidad/Promocion. */}
       {isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
         </div>
       ) : !solicitudes?.length ? (
-        <motion.div variants={fadeUp} className="rounded-2xl bg-white p-12 text-center shadow-card-rest border border-gray-100">
+        <div className="rounded-2xl bg-white p-12 text-center shadow-card-rest border border-gray-100">
           <ClipboardList className="mx-auto h-12 w-12 text-gray-300" />
           <p className="mt-3 font-medium text-gray-600">No tienes solicitudes aun</p>
           <p className="mt-1 text-sm text-gray-400">Explora el catalogo de cursos para inscribirte</p>
@@ -69,9 +74,9 @@ export default function MisSolicitudes() {
           >
             Ver Catalogo
           </button>
-        </motion.div>
+        </div>
       ) : (
-        <motion.div variants={stagger} className="space-y-4">
+        <div className="space-y-4">
           {solicitudes.map((item: any) => {
             const solicitud = item.solicitudes_curso;
             const curso = item.cursos;
@@ -80,9 +85,8 @@ export default function MisSolicitudes() {
             const EstatusIcon = config.icon;
 
             return (
-              <motion.div
+              <div
                 key={solicitud.id}
-                variants={fadeUp}
                 className="rounded-2xl bg-white p-5 shadow-card-rest border border-gray-100"
               >
                 <div className="flex items-start justify-between gap-4">
@@ -126,10 +130,10 @@ export default function MisSolicitudes() {
                     {config.label}
                   </span>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
-        </motion.div>
+        </div>
       )}
     </motion.div>
   );
